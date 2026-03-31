@@ -1,0 +1,10 @@
+C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\release\deps\icu_normalizer-a99a9ba3261cae20.d: C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\lib.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\properties.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\provider.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\uts46.rs
+
+C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\release\deps\libicu_normalizer-a99a9ba3261cae20.rlib: C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\lib.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\properties.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\provider.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\uts46.rs
+
+C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\release\deps\libicu_normalizer-a99a9ba3261cae20.rmeta: C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\lib.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\properties.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\provider.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\uts46.rs
+
+C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\lib.rs:
+C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\properties.rs:
+C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\provider.rs:
+C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer-2.1.1\src\uts46.rs:

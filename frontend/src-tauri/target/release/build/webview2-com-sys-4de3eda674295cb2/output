@@ -1,0 +1,2 @@
+cargo:rustc-link-search=native=C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\release\build\webview2-com-sys-4de3eda674295cb2\out\x64
+cargo:rustc-link-lib=advapi32

@@ -1,0 +1,9 @@
+C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\release\deps\windows_version-b4c51351db784c35.d: C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-version-0.1.7\src\lib.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-version-0.1.7\src\bindings.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-version-0.1.7\src\../readme.md
+
+C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\release\deps\libwindows_version-b4c51351db784c35.rlib: C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-version-0.1.7\src\lib.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-version-0.1.7\src\bindings.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-version-0.1.7\src\../readme.md
+
+C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\release\deps\libwindows_version-b4c51351db784c35.rmeta: C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-version-0.1.7\src\lib.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-version-0.1.7\src\bindings.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-version-0.1.7\src\../readme.md
+
+C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-version-0.1.7\src\lib.rs:
+C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-version-0.1.7\src\bindings.rs:
+C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-version-0.1.7\src\../readme.md:

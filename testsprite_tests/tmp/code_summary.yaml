@@ -1,0 +1,103 @@
+project_name: GA_ERP_FIXED
+project_type: Full-stack Web Application (ERP for Carpentry Business)
+tech_stack:
+  backend:
+    language: Python
+    framework: FastAPI
+    orm: SQLAlchemy
+    database: SQLite
+    dependencies:
+      - fastapi
+      - uvicorn
+      - sqlalchemy
+      - pydantic
+      - python-dotenv
+      - openpyxl
+      - cryptography
+      - httpx
+      - slowapi
+      - python-jose
+      - passlib
+      - python-multipart
+  frontend:
+    language: JavaScript (Plain, no TypeScript)
+    framework: React 18
+    build_tool: Vite
+    routing: React Router v6
+    http_client: Axios
+    charts: Recharts
+    desktop: Tauri 2.0
+  ports:
+    backend: 8000
+    frontend: 5173
+
+api_endpoints:
+  clients:
+    - POST /clients
+    - GET /clients
+    - GET /clients/{id}
+    - PUT /clients/{id}
+    - DELETE /clients/{id}
+  products:
+    - POST /products
+    - GET /products
+    - PUT /products/{id}
+    - PUT /products/{id}/restock
+    - DELETE /products/{id}
+  materials:
+    - POST /materials
+    - GET /materials
+    - PUT /materials/{id}
+    - DELETE /materials/{id}
+  sales:
+    - GET /sales
+    - POST /sales
+  invoices:
+    - POST /invoices
+    - GET /invoices
+    - GET /invoices/{id}
+    - DELETE /invoices/{id}
+  electronic_invoicing:
+    - GET /electronic-invoicing/status
+    - POST /electronic-invoicing/setup
+    - POST /electronic-invoicing/upload-certificate
+    - POST /electronic-invoicing/test-connection
+    - POST /electronic-invoicing/enable
+    - POST /electronic-invoicing/disable
+    - GET /electronic-invoicing/guide
+    - GET /electronic-invoicing/options
+    - POST /electronic-invoicing/check-cert-expiry
+  utilities:
+    - GET /dashboard
+    - GET /search?q={query}
+    - GET /health
+
+pages:
+  - Dashboard (/)
+  - Clients (/clients)
+  - Products (/products)
+  - Materials (/materials)
+  - Sales (/sales)
+  - Invoices (/invoices)
+  - ElectronicInvoicing (/electronic-invoicing)
+
+features:
+  - Client management with CUIT support
+  - Product inventory with stock tracking
+  - Material management with stock movements (IN/OUT)
+  - Sales with automatic stock deduction
+  - Electronic invoicing with ARCA/AFIP integration
+  - Dashboard with statistics
+  - Global search
+  - Excel export
+
+database_tables:
+  - clients
+  - products
+  - materials
+  - material_movements
+  - sales
+  - sale_items
+  - invoices
+  - electronic_invoice_config
+  - afip_auth_tokens

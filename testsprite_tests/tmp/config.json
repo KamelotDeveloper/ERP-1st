@@ -1,0 +1,18 @@
+{
+  "status": "commited",
+  "type": "backend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:5173",
+  "backendAuthType": "public",
+  "executionArgs": {
+    "projectName": "GA_ERP",
+    "projectPath": "C:\\Users\\Giuliano\\Desktop\\GA_ERP_FIXED",
+    "testIds": [],
+    "additionalInstruction": "Test the following key flows:\n1. Dashboard loads with statistics\n2. Create, read, update, delete a client\n3. Create, read, update, delete a product\n4. Create and list materials with stock movements\n5. Create and list sales\n6. Create an invoice and verify CAE generation\n7. Navigate through all pages via sidebar\n8. Use global search functionality",
+    "serverMode": "production",
+    "envs": {
+      "API_KEY": "sk-user-noE_3cHykCUdofNOpLV1r1t9s_S74MB2n6dptCpc3bhlBFa82XZgOVws-VSyzJbkgHlYlayZoSllGH1SThk4X8uv8SH1V8pUyYo-Ezd-Tuz6ZLGhz4aLwVsMvceva2HqPxo"
+    }
+  },
+  "serverPort": 60513
+}

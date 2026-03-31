@@ -1,0 +1,14 @@
+C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\debug\deps\serde-6989a8f582dacaa4.d: C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\debug\build\serde-f1dcd1860c115102\out/private.rs
+
+C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\debug\deps\libserde-6989a8f582dacaa4.rlib: C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\debug\build\serde-f1dcd1860c115102\out/private.rs
+
+C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\debug\deps\libserde-6989a8f582dacaa4.rmeta: C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\debug\build\serde-f1dcd1860c115102\out/private.rs
+
+C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs:
+C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs:
+C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs:
+C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs:
+C:\Users\Giuliano\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs:
+C:\Users\Giuliano\Desktop\GA_ERP_FIXED\frontend\src-tauri\target\debug\build\serde-f1dcd1860c115102\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\Users\\Giuliano\\Desktop\\GA_ERP_FIXED\\frontend\\src-tauri\\target\\debug\\build\\serde-f1dcd1860c115102\\out

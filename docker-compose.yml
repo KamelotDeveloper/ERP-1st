@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ga_erp_db
+    environment:
+      POSTGRES_USER: ga_erp
+      POSTGRES_PASSWORD: ga_erp_secure_password
+      POSTGRES_DB: ga_erp
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ga_erp -d ga_erp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ga_erp_backend
+    environment:
+      DATABASE_URL: postgresql://ga_erp:ga_erp_secure_password@postgres:5432/ga_erp
+      JWT_SECRET_KEY: change-me-in-production-use-strong-key
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      RATE_LIMIT_PER_MINUTE: 60
+      RATE_LIMIT_LOGIN_PER_MINUTE: 5
+      ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/backups:/app/backups
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ga_erp_frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

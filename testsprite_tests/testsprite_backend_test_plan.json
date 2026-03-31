@@ -1,0 +1,107 @@
+{
+  "projectName": "GA_ERP",
+  "testScope": "full",
+  "testCases": [
+    {
+      "id": "BACKEND-001",
+      "category": "Health",
+      "description": "Test health endpoint",
+      "endpoint": "/health",
+      "method": "GET",
+      "expectedStatus": 200
+    },
+    {
+      "id": "BACKEND-002",
+      "category": "Clients",
+      "description": "Create a new client",
+      "endpoint": "/clients",
+      "method": "POST",
+      "body": {"name": "Test Client", "email": "test@test.com", "phone": "12345678", "tax_id": "30678765438"},
+      "expectedStatus": 200
+    },
+    {
+      "id": "BACKEND-003",
+      "category": "Clients",
+      "description": "List all clients",
+      "endpoint": "/clients",
+      "method": "GET",
+      "expectedStatus": 200
+    },
+    {
+      "id": "BACKEND-004",
+      "category": "Products",
+      "description": "Create a new product",
+      "endpoint": "/products",
+      "method": "POST",
+      "body": {"sku": "TEST-001", "name": "Test Product", "price": 100.00, "stock": 10},
+      "expectedStatus": 200
+    },
+    {
+      "id": "BACKEND-005",
+      "category": "Products",
+      "description": "List all products",
+      "endpoint": "/products",
+      "method": "GET",
+      "expectedStatus": 200
+    },
+    {
+      "id": "BACKEND-006",
+      "category": "Materials",
+      "description": "Create a new material",
+      "endpoint": "/materials",
+      "method": "POST",
+      "body": {"sku": "MAT-001", "name": "Test Material", "category": "Test", "stock": 50, "unit_cost": 10.00},
+      "expectedStatus": 200
+    },
+    {
+      "id": "BACKEND-007",
+      "category": "Materials",
+      "description": "List all materials",
+      "endpoint": "/materials",
+      "method": "GET",
+      "expectedStatus": 200
+    },
+    {
+      "id": "BACKEND-008",
+      "category": "Dashboard",
+      "description": "Get dashboard statistics",
+      "endpoint": "/dashboard",
+      "method": "GET",
+      "expectedStatus": 200
+    },
+    {
+      "id": "BACKEND-009",
+      "category": "ElectronicInvoicing",
+      "description": "Get electronic invoicing status",
+      "endpoint": "/electronic-invoicing/status",
+      "method": "GET",
+      "expectedStatus": 200
+    },
+    {
+      "id": "BACKEND-010",
+      "category": "ElectronicInvoicing",
+      "description": "Get setup guide",
+      "endpoint": "/electronic-invoicing/guide",
+      "method": "GET",
+      "expectedStatus": 200
+    },
+    {
+      "id": "BACKEND-011",
+      "category": "ElectronicInvoicing",
+      "description": "Setup electronic invoicing",
+      "endpoint": "/electronic-invoicing/setup",
+      "method": "POST",
+      "params": {"razon_social": "Test Business", "CUIT": "30678765438", "punto_venta": 1, "ambiente": "testing"},
+      "expectedStatus": 200
+    },
+    {
+      "id": "BACKEND-012",
+      "category": "Search",
+      "description": "Search functionality",
+      "endpoint": "/search",
+      "method": "GET",
+      "params": {"q": "test"},
+      "expectedStatus": 200
+    }
+  ]
+}

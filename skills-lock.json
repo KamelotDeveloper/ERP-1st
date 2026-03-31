@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "database-schema-design": {
+      "source": "supercent-io/skills-template",
+      "sourceType": "github",
+      "computedHash": "4c33e1db0dbbe6f7c4c99a8a4d38b695d8bc417bcad3f18a34543c8d9bceb79d"
+    },
+    "security-best-practices": {
+      "source": "supercent-io/skills-template",
+      "sourceType": "github",
+      "computedHash": "c5ddd50338549d28b2edd45cec131d6a231349b0671a093b3b7e3b51d4780ab8"
+    },
+    "supabase-postgres-best-practices": {
+      "source": "supabase/agent-skills",
+      "sourceType": "github",
+      "computedHash": "e3ba3d760c5f4cc43b02a91fb8924f726c7818f95cc35d79d0a606ca622b72f5"
+    },
+    "tauri-v2": {
+      "source": "nodnarbnitram/claude-code-extensions",
+      "sourceType": "github",
+      "computedHash": "a333d119fa97f6a4c72d7f5a0e7c44c1c614254b8d67383f83ff23ac1af2afb0"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "e218e50fe7057a4db91390e579c7db5aafac2394c31a3d8e5fa9444c8fa00726"
+    },
+    "webapp-testing": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "5a6a18c0137cfbabec058e86fc1c8f6919d846a7b2a34ee978cc8ced866ee2e5"
+    }
+  }
+}
