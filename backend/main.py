@@ -50,7 +50,14 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
+    allow_origins=[
+        "http://tauri.localhost",
+        "tauri://localhost",
+        "http://localhost:1420",
+        "http://localhost:5173",
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -79,11 +86,50 @@ async def log_requests(request: Request, call_next):
 # create tables
 Base.metadata.create_all(bind=engine)
 
+# Create default admin user if not exists
+from models import User
+from database import SessionLocal
+import bcrypt
+
+def create_default_admin():
+    db = SessionLocal()
+    try:
+        # Check if admin exists
+        admin = db.query(User).filter(User.role == "admin").first()
+        if not admin:
+            # Create default admin user
+            hashed = bcrypt.hashpw("elmenestral123".encode(), bcrypt.gensalt())
+            admin = User(
+                username="elmenestral",
+                email="info@elmenestral.com",
+                hashed_password=hashed.decode(),
+                role="admin",
+                is_active=True
+            )
+            db.add(admin)
+            db.commit()
+            logger.info("Default admin user created: elmenestral")
+        else:
+            logger.info("Admin user already exists")
+    except Exception as e:
+        logger.error(f"Error creating admin: {e}")
+    finally:
+        db.close()
+
+# Create default admin on startup
+create_default_admin()
+
 # include routes
 app.include_router(router)
 app.include_router(invoices_router)
 app.include_router(electronic_invoicing_router)
 app.include_router(auth.router)
+from routers import produccion
+app.include_router(produccion.router)
+from routers import presupuestos
+app.include_router(presupuestos.router)
+from routers import export
+app.include_router(export.router)
 
 # Health check
 @app.get("/health")

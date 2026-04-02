@@ -5,6 +5,21 @@
   "permissions": [
     "core:default",
     "shell:allow-spawn",
-    "shell:allow-execute"
+    "shell:allow-execute",
+    "fs:default",
+    "fs:allow-exists",
+    "fs:allow-mkdir",
+    "fs:allow-write-text-file",
+    "fs:allow-read-text-file",
+    "fs:allow-write-file",
+    "fs:allow-read-file",
+    "fs:allow-write",
+    "fs:allow-read",
+    "fs:scope-desktop",
+    "fs:scope-desktop-recursive",
+    "fs:write-all",
+    "fs:read-all",
+    "dialog:default",
+    "dialog:allow-save"
   ]
 }

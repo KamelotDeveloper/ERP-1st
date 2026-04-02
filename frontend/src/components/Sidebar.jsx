@@ -1,8 +1,12 @@
 import { NavLink } from "react-router-dom";
+import { downloadFileFromBackend, ensureDownloadFolder } from "../services/downloadService";
 
 export default function Sidebar() {
-  const download = (url) => {
-    window.open("http://127.0.0.1:8000" + url);
+  const handleDownload = async (url, filename) => {
+    // Ensure download folder exists first
+    await ensureDownloadFolder();
+    // Then download
+    await downloadFileFromBackend(url, filename);
   };
 
   return (
@@ -30,26 +34,29 @@ export default function Sidebar() {
         <NavLink to="/sales" className="nav-item">
           💰 Ventas
         </NavLink>
+        <NavLink to="/budget" className="nav-item">
+          📝 Presupuestos
+        </NavLink>
+        <NavLink to="/produccion" className="nav-item">
+          🏭 Producción
+        </NavLink>
         <NavLink to="/invoices" className="nav-item invoice-link">
           🧾 Facturación ARCA
         </NavLink>
         <NavLink to="/electronic-invoicing" className="nav-item">
           ⚙️ Config. FE
         </NavLink>
-        <NavLink to="/profile" className="nav-item">
-          🔐 Cambiar Contraseña
-        </NavLink>
       </nav>
 
       <div className="exports">
         <p className="export-title">Exportar</p>
-        <button onClick={() => download("/export/clients")}>
+        <button onClick={() => handleDownload("/export/clients", "clientes.xlsx")}>
           📥 Clientes Excel
         </button>
-        <button onClick={() => download("/export/products")}>
+        <button onClick={() => handleDownload("/export/products", "productos.xlsx")}>
           📥 Productos Excel
         </button>
-        <button onClick={() => download("/export/materials")}>
+        <button onClick={() => handleDownload("/export/materials", "materiales.xlsx")}>
           📥 Materiales Excel
         </button>
       </div>

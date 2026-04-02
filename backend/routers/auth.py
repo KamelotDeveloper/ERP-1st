@@ -262,23 +262,74 @@ def create_admin_user(db: Session = Depends(get_db)):
 def change_password(
     request: Request,
     data: schemas.ChangePasswordRequest,
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Change user's password without authentication (for now)"""
-    # For now, just reset the admin password
-    admin = db.query(models.User).filter(models.User.username == "admin").first()
-    if not admin:
+    """Change current user's password"""
+    if not current_user.check_password(data.old_password):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No user found"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña actual es incorrecta"
         )
     
-    admin.set_password(data.new_password)
+    current_user.set_password(data.new_password)
     db.commit()
     
-    logger.info("Password changed successfully")
+    logger.info(f"Password changed for user: {current_user.username}")
     
     return {"success": True, "message": "Contraseña actualizada correctamente"}
+
+
+@router.put("/profile")
+@limiter.limit("10/minute")
+def update_profile(
+    request: Request,
+    data: schemas.UpdateProfileRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user's profile (username and/or password)"""
+    # If changing username, check it's not taken
+    if data.username and data.username != current_user.username:
+        existing = db.query(models.User).filter(
+            models.User.username == data.username
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El nombre de usuario ya está en uso"
+            )
+        current_user.username = data.username
+        logger.info(f"Username changed to: {data.username}")
+    
+    # If changing password, verify old password first
+    if data.new_password:
+        if not data.old_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Debe proporcionar la contraseña actual para cambiar la contraseña"
+            )
+        if not current_user.check_password(data.old_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La contraseña actual es incorrecta"
+            )
+        current_user.set_password(data.new_password)
+        logger.info(f"Password changed for user: {current_user.username}")
+    
+    db.commit()
+    db.refresh(current_user)
+    
+    return {
+        "success": True,
+        "message": "Perfil actualizado correctamente",
+        "user": {
+            "id": current_user.id,
+            "username": current_user.username,
+            "email": current_user.email,
+            "role": current_user.role
+        }
+    }
 
 
 @router.post("/forgot-password")

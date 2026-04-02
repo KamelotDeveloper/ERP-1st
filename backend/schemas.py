@@ -38,6 +38,12 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=6)
 
 
+class UpdateProfileRequest(BaseModel):
+    username: Optional[str] = None
+    old_password: Optional[str] = None
+    new_password: Optional[str] = Field(None, min_length=6)
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
@@ -195,3 +201,183 @@ class AfipConfig(BaseModel):
     cuit: str
     punto_venta: int = 1
     ambiente: str = "testing"
+
+
+# ==================== ESQUEMAS DE PRODUCCIÓN ====================
+
+class PlantillaMaterialBase(BaseModel):
+    material_id: int
+    cantidad: float
+
+
+class PlantillaMaterialCreate(PlantillaMaterialBase):
+    pass
+
+
+class PlantillaMaterial(PlantillaMaterialBase):
+    id: int
+    material_name: Optional[str] = None
+    material_sku: Optional[str] = None
+    material_stock: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PlantillaProduccionBase(BaseModel):
+    product_id: int
+    is_active: bool = True
+
+
+class PlantillaProduccionCreate(PlantillaProduccionBase):
+    materiales: List[PlantillaMaterialCreate]
+
+
+class PlantillaProduccionUpdate(BaseModel):
+    product_id: Optional[int] = None
+    is_active: Optional[bool] = None
+    materiales: Optional[List[PlantillaMaterialCreate]] = None
+
+
+class PlantillaProduccion(PlantillaProduccionBase):
+    id: int
+    product_name: Optional[str] = None
+    product_sku: Optional[str] = None
+    materiales: List[PlantillaMaterial] = []
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MaterialConsumoBase(BaseModel):
+    material_id: int
+    cantidad_necesaria: float
+
+
+class MaterialConsumo(MaterialConsumoBase):
+    id: int
+    material_name: Optional[str] = None
+    material_sku: Optional[str] = None
+    stock_actual: Optional[float] = None
+    tiene_suficiente: Optional[bool] = None
+
+    class Config:
+        from_attributes = True
+
+
+class OrdenProduccionBase(BaseModel):
+    plantilla_id: int
+    cantidad: int
+    notas: Optional[str] = None
+
+
+class OrdenProduccionCreate(OrdenProduccionBase):
+    pass
+
+
+class OrdenProduccion(OrdenProduccionBase):
+    id: int
+    estado: str
+    product_name: Optional[str] = None
+    materiales: List[MaterialConsumo] = []
+    fecha_creacion: datetime
+    fecha_fin: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ExplosiónMaterialesResponse(BaseModel):
+    """Respuesta de la explosión de materiales"""
+    plantilla_id: int
+    product_id: int
+    product_name: str
+    cantidad_producir: int
+    materiales: List[MaterialConsumo]
+    puede_producir: bool
+    materiales_faltantes: Optional[List[str]] = None
+
+
+class ProduccionEjecutarRequest(BaseModel):
+    """Request para ejecutar una orden de producción"""
+    plantilla_id: int
+    cantidad: int
+    notas: Optional[str] = None
+
+
+class ProduccionEjecutarResponse(BaseModel):
+    """Response después de ejecutar la producción"""
+    success: bool
+    message: str
+    orden_id: Optional[int] = None
+    materiales_actualizados: Optional[List[dict]] = None
+    producto_actualizado: Optional[dict] = None
+
+
+# ==================== ESQUEMAS DE PRESUPUESTOS ====================
+
+class PresupuestoItemBase(BaseModel):
+    material_id: int
+    cantidad: float
+
+
+class PresupuestoItemCreate(PresupuestoItemBase):
+    pass
+
+
+class PresupuestoItem(PresupuestoItemBase):
+    id: int
+    material_name: Optional[str] = None
+    material_sku: Optional[str] = None
+    precio_unitario: float
+    subtotal: float
+
+    class Config:
+        from_attributes = True
+
+
+class PresupuestoBase(BaseModel):
+    nombre: str
+    cliente_nombre: Optional[str] = None
+    cliente_telefono: Optional[str] = None
+    cliente_email: Optional[str] = None
+    costo_mano_obra: float = 0
+    margen: float = 0
+    notas: Optional[str] = None
+
+
+class PresupuestoCreate(PresupuestoBase):
+    items: List[PresupuestoItemCreate]
+
+
+class PresupuestoUpdate(BaseModel):
+    nombre: Optional[str] = None
+    cliente_nombre: Optional[str] = None
+    cliente_telefono: Optional[str] = None
+    cliente_email: Optional[str] = None
+    costo_mano_obra: Optional[float] = None
+    margen: Optional[float] = None
+    notas: Optional[str] = None
+    items: Optional[List[PresupuestoItemCreate]] = None
+
+
+class Presupuesto(PresupuestoBase):
+    id: int
+    estado: str
+    costo_materiales: float
+    precio_final: float
+    items: List[PresupuestoItem] = []
+    fecha_creacion: datetime
+    fecha_aceptacion: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PresupuestoConfirmarVentaResponse(BaseModel):
+    success: bool
+    message: str
+    venta_id: Optional[int] = None
+    materiales_actualizados: Optional[List[dict]] = None

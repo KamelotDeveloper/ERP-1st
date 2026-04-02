@@ -540,6 +540,11 @@ def global_search(q: str, db: Session = Depends(get_db)):
         models.Client.email.ilike(q_like)
     ).limit(5).all()
 
+    presupuestos = db.query(models.Presupuesto).filter(
+        models.Presupuesto.nombre.ilike(q_like) |
+        models.Presupuesto.cliente_nombre.ilike(q_like)
+    ).limit(5).all()
+
     result = []
 
     for p in products:
@@ -564,6 +569,14 @@ def global_search(q: str, db: Session = Depends(get_db)):
             "id": c.id,
             "label": f"Cliente: {c.name}",
             "page": "/clients"
+        })
+
+    for pre in presupuestos:
+        result.append({
+            "type": "presupuesto",
+            "id": pre.id,
+            "label": f"Presupuesto: {pre.nombre} ({pre.cliente_nombre or 'Sin cliente'}) - ${pre.precio_final:,.0f}",
+            "page": "/budget"
         })
 
     return result
