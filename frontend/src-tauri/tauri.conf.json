@@ -36,6 +36,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": {
+      "backend/*": "backend/"
+    },
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",

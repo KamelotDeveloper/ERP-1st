@@ -30,6 +30,13 @@ fn find_python() -> Option<PathBuf> {
         }
     }
 
+    // macOS: try python3
+    if cfg!(target_os = "macos") {
+        if Command::new("python3").arg("--version").output().is_ok() {
+            return Some(PathBuf::from("python3"));
+        }
+    }
+
     // Then check common installation paths on Windows
     let possible_paths = [
         r"C:\Python314\python.exe",
@@ -59,14 +66,17 @@ fn main() {
     let current_exe = std::env::current_exe().unwrap_or_default();
     let exe_dir = current_exe.parent().unwrap_or(&current_exe);
 
+    // Get the resources directory for bundled apps
+    let resources_dir = exe_dir.join("resources");
+
     // Search in multiple locations
     let possible_backend_paths = [
         // Same directory as exe
         exe_dir.to_path_buf(),
+        // Resources folder (for bundled apps)
+        resources_dir.join("backend"),
         // Bundle folder
         exe_dir.join("bundle").join("backend"),
-        // Resources folder
-        exe_dir.join("resources").join("backend"),
         // One level up
         exe_dir.join("..").to_path_buf(),
         exe_dir.join("..").join("bundle").join("backend"),
@@ -74,10 +84,16 @@ fn main() {
         // Two levels up
         exe_dir.join("..").join("..").to_path_buf(),
         exe_dir.join("..").join("..").join("bundle").join("backend"),
+        exe_dir
+            .join("..")
+            .join("..")
+            .join("resources")
+            .join("backend"),
     ];
 
     let mut backend_exe = None;
     let mut backend_path = None;
+    let mut python_backend = None;
 
     // First, look for the PyInstaller executable
     for path in &possible_backend_paths {
@@ -98,8 +114,24 @@ fn main() {
             println!("Found backend exe at: {:?}", exe_in_backend);
             break;
         }
+
+        // Check for Python main.py in backend folder
+        let py_main = path.join("main.py");
+        if py_main.exists() {
+            python_backend = Some(path.clone());
+            println!("Found Python backend at: {:?}", py_main);
+            break;
+        }
+
+        let py_in_backend = path.join("backend").join("main.py");
+        if py_in_backend.exists() {
+            python_backend = Some(path.join("backend"));
+            println!("Found Python backend at: {:?}", py_in_backend);
+            break;
+        }
     }
 
+    // Start backend (prefer exe, fallback to Python)
     if let Some(bp) = backend_path {
         // Try to use the PyInstaller executable first
         if let Some(be) = backend_exe {
@@ -123,8 +155,10 @@ fn main() {
 
             println!("Backend executable started");
             thread::sleep(Duration::from_secs(4));
-        } else if let Some(python) = find_python() {
-            // Fallback: use Python if exe not found
+        }
+    } else if let Some(bp) = python_backend {
+        // Fallback: use Python
+        if let Some(python) = find_python() {
             println!("Using Python: {:?}", python);
 
             // Check if dependencies work
