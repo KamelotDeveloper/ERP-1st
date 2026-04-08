@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Rust/Tauri
+target/
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Distribución
+dist/
+El_Menestral_ERP*.zip
+El_Menestral_ERP_Setup.exe
+*.exe
+
+# OpenCode
+.opencode/
+.agents/
+
+# Testsprite
+testsprite_tests/
+opencode.json
+skills-lock.json

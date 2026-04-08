@@ -2,12 +2,12 @@ import os
 import json
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body
+from typing import Optional
 from database import SessionLocal
 import models
-from services.wsfe_client import create_wsaa_client
 from services.afip_service import create_afip_service
+from services.wsfe_client import create_wsaa_client
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,8 @@ def get_db():
         yield db
     finally:
         db.close()
+
+from sqlalchemy.orm import Session
 
 
 def get_config(db: Session):
@@ -82,10 +84,10 @@ def get_status(db: Session = Depends(get_db)):
 
 @router.post("/setup")
 def setup_electronic_invoicing(
-    razon_social: str,
-    CUIT: str,
-    punto_venta: int = 1,
-    ambiente: str = "testing",
+    razon_social: str = Body(...),
+    CUIT: str = Body(...),
+    punto_venta: int = Body(1),
+    ambiente: str = Body("testing"),
     db: Session = Depends(get_db)
 ):
     """Paso 1: Configuración inicial con validación de CUIT"""

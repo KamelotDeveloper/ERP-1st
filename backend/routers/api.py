@@ -72,9 +72,14 @@ def create_client(data: schemas.ClientCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/clients")
-def list_clients(db: Session = Depends(get_db)):
+def list_clients(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
+    return db.query(models.Client).offset(skip).limit(limit).all()
 
-    return db.query(models.Client).all()
+
+@router.get("/clients/count")
+def count_clients(db: Session = Depends(get_db)):
+    count = db.query(models.Client).count()
+    return {"count": count}
 
 
 @router.put("/clients/{id}")
@@ -128,9 +133,14 @@ def create_product(
 
 
 @router.get("/products")
-def list_products(db: Session = Depends(get_db)):
+def list_products(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
+    return db.query(models.Product).offset(skip).limit(limit).all()
 
-    return db.query(models.Product).all()
+
+@router.get("/products/count")
+def count_products(db: Session = Depends(get_db)):
+    count = db.query(models.Product).count()
+    return {"count": count}
 
 
 @router.put("/products/{id}")
@@ -228,10 +238,12 @@ def create_material(
 
 
 @router.get("/materials")
-def list_materials(db: Session = Depends(get_db)):
+def list_materials(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
 
     materials = db.query(models.Material)\
         .order_by(models.Material.category, models.Material.name)\
+        .offset(skip)\
+        .limit(limit)\
         .all()
 
     result = []
@@ -262,6 +274,12 @@ def list_materials(db: Session = Depends(get_db)):
         })
 
     return result
+
+
+@router.get("/materials/count")
+def count_materials(db: Session = Depends(get_db)):
+    count = db.query(models.Material).count()
+    return {"count": count}
 
 
 @router.put("/materials/{id}")
@@ -331,9 +349,9 @@ def delete_material(
 # -------------------------
 
 @router.get("/sales")
-def list_sales(db: Session = Depends(get_db)):
+def list_sales(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
     """List all sales (public endpoint)"""
-    sales = db.query(models.Sale).order_by(models.Sale.date.desc()).all()
+    sales = db.query(models.Sale).order_by(models.Sale.date.desc()).offset(skip).limit(limit).all()
 
     result = []
     for s in sales:
@@ -347,6 +365,12 @@ def list_sales(db: Session = Depends(get_db)):
         })
 
     return result
+
+
+@router.get("/sales/count")
+def count_sales(db: Session = Depends(get_db)):
+    count = db.query(models.Sale).count()
+    return {"count": count}
 
 
 @router.get("/sales/{sale_id}")

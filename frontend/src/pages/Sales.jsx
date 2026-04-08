@@ -9,20 +9,35 @@ export default function Sales() {
   const [product, setProduct] = useState("");
   const [qty, setQty] = useState(1);
   const [error, setError] = useState("");
+  
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 20;
+  const [loading, setLoading] = useState(false);
 
-  const load = async () => {
+  const loadData = async (page = 1) => {
+    setLoading(true);
     try {
-      const [salesRes, clientsRes, productsRes] = await Promise.all([
-        api.get("/sales"),
-        api.get("/clients"),
-        api.get("/products"),
+      const token = localStorage.getItem("token");
+      const skip = (page - 1) * itemsPerPage;
+      
+      const [salesRes, clientsRes, productsRes, countRes] = await Promise.all([
+        api.get(`/sales?skip=${skip}&limit=${itemsPerPage}`, { headers: { Authorization: `Bearer ${token}` } }),
+        api.get("/clients", { headers: { Authorization: `Bearer ${token}` } }),
+        api.get("/products", { headers: { Authorization: `Bearer ${token}` } }),
+        api.get("/sales/count", { headers: { Authorization: `Bearer ${token}` } })
       ]);
+      
       setSales(salesRes.data || []);
       setClients(clientsRes.data || []);
       setProducts(productsRes.data || []);
+      setCurrentPage(page);
+      setTotalPages(Math.ceil((countRes.data.count || 0) / itemsPerPage));
     } catch (err) {
       console.error("Error loading:", err);
     }
+    setLoading(false);
   };
 
   const create = async () => {
@@ -32,6 +47,7 @@ export default function Sales() {
       return;
     }
     try {
+      const token = localStorage.getItem("token");
       await api.post("/sales", {
         client_id: Number(client),
         items: [
@@ -40,12 +56,12 @@ export default function Sales() {
             quantity: Number(qty),
           },
         ],
-      });
+      }, { headers: { Authorization: `Bearer ${token}` } });
 
       setClient("");
       setProduct("");
       setQty(1);
-      load();
+      loadData(currentPage);
     } catch (err) {
       setError("Error al crear venta: " + (err.response?.data?.detail || err.message));
     }
@@ -55,14 +71,14 @@ export default function Sales() {
     if (!confirm("¿Eliminar venta?")) return;
     try {
       await api.delete("/sales/" + id);
-      load();
+      loadData(currentPage);
     } catch (err) {
       alert("Error al eliminar");
     }
   };
 
   useEffect(() => {
-    load();
+    loadData(1);
   }, []);
 
   const getClientName = (id) => {
@@ -143,6 +159,8 @@ export default function Sales() {
         </div>
       </div>
 
+      {loading && <div style={{ textAlign: "center", padding: "10px" }}>Cargando...</div>}
+
       <h3 style={{ marginTop: "30px", marginBottom: "15px", color: "#654321" }}>
         Historial de Ventas
       </h3>
@@ -189,6 +207,26 @@ export default function Sales() {
           )}
         </tbody>
       </table>
+
+      {totalPages > 1 && (
+        <div className="pagination" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", marginTop: "20px" }}>
+          <button
+            className="btn"
+            onClick={() => loadData(currentPage - 1)}
+            disabled={currentPage === 1}
+          >
+            ← Anterior
+          </button>
+          <span>Página {currentPage} de {totalPages}</span>
+          <button
+            className="btn"
+            onClick={() => loadData(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+          >
+            Siguiente →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,6 +2,8 @@ import os
 import json
 import base64
 import hashlib
+import subprocess
+import tempfile
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from cryptography import x509
@@ -16,10 +18,12 @@ logger = logging.getLogger(__name__)
 class WSAAClient:
     """Cliente para WSAA (Autenticación) de ARCA/AFIP"""
     
-    WSAA_URL_TEST = "https://wsaa.afip.gov.ar/WS/services/LoginCms"
+    # URLs de homologación (testing) - ARCA
+    WSAA_URL_TEST = "https://wsaahomo.afip.gov.ar/ws/services/LoginCms"
     WSAA_URL_PROD = "https://wsaa.afip.gov.ar/WS/services/LoginCms"
     
-    WSFE_URL_TEST = "https://servicios1.afip.gov.ar/wsfev1/service.asmx"
+    # URLs de homologación (testing) - ARCA
+    WSFE_URL_TEST = "https://wswhomo.afip.gov.ar/wsfev1/service.asmx"
     WSFE_URL_PROD = "https://servicios1.afip.gov.ar/wsfev1/service.asmx"
     
     TRA_SERVICE = "wsfe"
@@ -72,28 +76,104 @@ class WSAAClient:
         return tra.strip()
     
     def _sign_tra(self, tra: str, cert, key) -> str:
-        """Firma el TRA con el certificado"""
-        from cryptography.hazmat.primitives import hashes
+        """Firma el TRA con el certificado usando PKCS#7/CMS con formato válido para WSAA"""
+        from cryptography.hazmat.primitives import hashes, serialization
         from cryptography.hazmat.primitives.asymmetric import padding
+        from cryptography import x509
+        from cryptography.hazmat.primitives.serialization.pkcs7 import PKCS7SignatureBuilder, PKCS7Options
+        import email.generator
+        import io
         
         tra_bytes = tra.encode('utf-8')
         
-        signature = key.sign(
-            tra_bytes,
-            padding.PKCS1v15(),
-            hashes.SHA256()
-        )
+        # Cargar certificado y clave desde archivos
+        with open(self.cert_path, 'rb') as f:
+            cert_pem = f.read()
+        with open(self.key_path, 'rb') as f:
+            key_pem = f.read()
         
-        signature_b64 = base64.b64encode(signature).decode('utf-8')
+        # Cargar certificado X509
+        certificate = x509.load_pem_x509_certificate(cert_pem)
         
-        cert_b64 = base64.b64encode(cert.public_bytes(serialization.Encoding.PEM)).decode('utf-8')
+        # Cargar clave privada
+        private_key = serialization.load_pem_private_key(key_pem, password=None)
         
-        cms = f"""-----BEGIN CMS-----
-{cert_b64}
-{signature_b64}
------END CMS-----"""
+        try:
+            # Crear estructura PKCS#7 signed data (formato SMIME como M2Crypto)
+            # Primero: crear firma PKCS#7
+            builder = PKCS7SignatureBuilder()
+            builder = builder.set_data(tra_bytes)
+            builder = builder.add_signer(certificate, private_key, hashes.SHA256())
+            
+            # Firmar en formato DER - incluir certificados para que sea válido
+            signed_data = builder.sign(
+                serialization.Encoding.DER, 
+                []  # Sin opciones especiales - incluir certificados
+            )
+            
+            # Convertir a base64 directamente (formato SMIME)
+            cms_b64 = base64.b64encode(signed_data).decode('utf-8')
+            
+            logger.info("Firma PKCS#7 creada exitosamente (cryptography)")
+            return cms_b64
+            
+        except Exception as e:
+            logger.error(f"Error firmando PKCS#7: {e}")
+            raise
+    
+    def _sign_tra_openssl(self, tra: str) -> str:
+        """Firma usando openssl directamente como último recurso"""
+        import tempfile
+        import subprocess
         
-        return cms
+        tra_bytes = tra.encode('utf-8')
+        
+        # Crear archivos temporales
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.tra', delete=False) as tra_file:
+            tra_file.write(tra_bytes)
+            tra_path = tra_file.name
+        
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cert_file:
+            cert_file.write(open(self.cert_path, 'rb').read())
+            cert_path = cert_file.name
+            
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as key_file:
+            key_file.write(open(self.key_path, 'rb').read())
+            key_path = key_file.name
+        
+        output_path = tra_path + '.sig'
+        
+        try:
+            # Usar openssl para firmar
+            cmd = [
+                'openssl', 'smime', '-sign',
+                '-in', tra_path,
+                '-signer', cert_path,
+                '-inkey', key_path,
+                '-outform', 'DER',
+                '-out', output_path,
+                '-nodetach'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, timeout=30)
+            
+            if result.returncode != 0:
+                raise Exception(f"OpenSSL error: {result.stderr.decode()}")
+            
+            with open(output_path, 'rb') as f:
+                cms_der = f.read()
+            
+            cms_b64 = base64.b64encode(cms_der).decode('utf-8')
+            logger.info("Firma OpenSSL smime creada exitosamente")
+            return cms_b64
+            
+        finally:
+            # Limpiar archivos temporales
+            for p in [tra_path, cert_path, key_path, output_path]:
+                try:
+                    os.unlink(p)
+                except:
+                    pass
     
     def request_token(self) -> Dict[str, Any]:
         """Obtiene el token de acceso desde WSAA"""
@@ -102,36 +182,63 @@ class WSAAClient:
             tra = self._create_tra()
             cms = self._sign_tra(tra, cert, key)
             
-            files = {
-                'in': ('loginTicketRequest.xml', tra.encode('utf-8'), 'text/xml'),
-                'cms': ('loginTicketRequest.cms', cms.encode('utf-8'), 'application/xml')
-            }
-            
             wsaa_url = self.get_wsaa_url()
             logger.info(f"Solicitando token a WSAA: {wsaa_url}")
             
-            with httpx.Client(timeout=30.0) as client:
-                response = client.post(
-                    wsaa_url,
-                    files=files
-                )
+            # Enviar como SOAP XML con el CMS
+            soap_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <loginCms xmlns="http://wsaa.view.servicios.afip.gov.ar">
+      <in0>{cms}</in0>
+    </loginCms>
+  </soap:Body>
+</soap:Envelope>'''
             
-            if response.status_code != 200:
+            import urllib.request
+            
+            req = urllib.request.Request(
+                wsaa_url,
+                data=soap_xml.encode('utf-8'),
+                headers={
+                    'Content-Type': 'text/xml; charset=utf-8',
+                    'SOAPAction': 'http://ar.gov.afip.wsaa/loginCms'
+                }
+            )
+            
+            with urllib.request.urlopen(req, timeout=30) as response:
+                response_xml = response.read().decode('utf-8')
+                response_status = response.status
+            
+            if response_status != 200:
                 return {
                     "success": False,
-                    "error": f"WSAA Error: HTTP {response.status_code}",
-                    "details": response.text
+                    "error": f"WSAA Error: HTTP {response_status}",
+                    "details": response_xml
                 }
-            
-            response_xml = response.text
             
             import xml.etree.ElementTree as ET
             root = ET.fromstring(response_xml)
             
+            # Buscar loginCmsReturn - contiene el XML con el token
             ns = {'ns': 'http://wsaa.view.servicios.afip.gov.ar'}
             
-            token_elem = root.find('.//ns:token', ns)
-            sign_elem = root.find('.//ns:sign', ns)
+            login_return_elem = root.find('.//ns:loginCmsReturn', ns)
+            
+            if login_return_elem is None:
+                return {
+                    "success": False,
+                    "error": "No se encontró loginCmsReturn en respuesta WSAA",
+                    "details": response_xml
+                }
+            
+            # El loginCmsReturn contiene otro XML con el token
+            inner_xml = login_return_elem.text
+            inner_root = ET.fromstring(inner_xml)
+            
+            # Buscar token y sign dentro del XML interno
+            token_elem = inner_root.find('.//token')
+            sign_elem = inner_root.find('.//sign')
             
             if token_elem is not None and sign_elem is not None:
                 self._token = token_elem.text
@@ -238,7 +345,7 @@ class WSFEClient:
             
             headers = {
                 'Content-Type': 'text/xml; charset=utf-8',
-                'SOAPAction': 'http://ar.gov.afip.dif.fev1/FEAuthorisation/autorizarRequest'
+                'SOAPAction': ''
             }
             
             with httpx.Client(timeout=60.0) as client:
@@ -259,28 +366,35 @@ class WSFEClient:
             }
     
     def _build_soap_request(self, auth: Dict[str, Any], fe_data: Dict[str, Any]) -> str:
-        """Construye el envelope SOAP para WSFE"""
+        """Construye el envelope SOAP para WSFE siguiendo la API de AFIP"""
         token = auth.get("token", "")
         sign = auth.get("sign", "")
+        cuit = self.wsaa_client.CUIT
         
-        fe_data_json = json.dumps(fe_data)
+        # Estructura según la API de AFIP
+        # El Auth va dentro del FeCAEReq, no en el header SOAP
+        request_data = {
+            "Auth": {
+                "Token": token,
+                "Sign": sign,
+                "Cuit": int(cuit)
+            },
+            "FeCAEReq": fe_data.get("FeCAEReq")
+        }
         
+        request_json = json.dumps(request_data)
+        
+        # Usar namespace soap y ns1 correctamente
         soap = f'''<?xml version="1.0" encoding="UTF-8"?>
-<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" 
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
                    xmlns:ns1="http://ar.gov.afip.dif.fev1/">
-    <SOAP-ENV:Header>
-        <ns1:Auth>
-            <Token>{token}</Token>
-            <Sign>{sign}</Sign>
-            <Cuit>{self.wsaa_client.CUIT}</Cuit>
-        </ns1:Auth>
-    </SOAP-ENV:Header>
-    <SOAP-ENV:Body>
+    <soap:Header/>
+    <soap:Body>
         <ns1:FECAESolicitar>
-            <FeCAEReq>{fe_data_json}</FeCAEReq>
+            <ns1:FeCAEReq>{request_json}</ns1:FeCAEReq>
         </ns1:FECAESolicitar>
-    </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>'''
+    </soap:Body>
+</soap:Envelope>'''
         
         return soap
     

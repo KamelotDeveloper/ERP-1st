@@ -52,7 +52,8 @@ export default function ElectronicInvoicing() {
       setStep(2);
       loadStatus();
     } catch (err) {
-      alert(err.response?.data?.detail || "Error");
+      const errorMsg = err.response?.data?.detail || err.message || JSON.stringify(err);
+      alert("Error: " + errorMsg);
     }
     setLoading(false);
   };

@@ -14,16 +14,18 @@ from routers.invoices import router as invoices_router
 from routers.electronic_invoicing import router as electronic_invoicing_router
 from routers import auth
 from config import settings
+from utils.paths import get_base_dir
 
-LOG_DIR = "./logs"
-os.makedirs(LOG_DIR, exist_ok=True)
+# Usar directorio del ejecutable para logs (NO _MEIPASS)
+LOG_DIR = get_base_dir() / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         RotatingFileHandler(
-            os.path.join(LOG_DIR, "app.log"),
+            str(LOG_DIR / "app.log"),
             maxBytes=10 * 1024 * 1024,
             backupCount=5
         ),
@@ -51,12 +53,10 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "*",
         "http://tauri.localhost",
         "tauri://localhost",
-        "http://localhost:1420",
-        "http://localhost:5173",
-        "http://127.0.0.1:8000",
-        "http://localhost:8000",
+        "tauri://",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -145,3 +145,27 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("GA ERP System shutting down")
+
+
+# ============================================================
+# INICIO DEL SERVIDOR - Solo para PyInstaller
+# ============================================================
+if __name__ == "__main__":
+    import uvicorn
+    from utils.paths import is_frozen
+    
+    # Determinar host y puerto
+    host = "127.0.0.1"
+    port = 8000
+    
+    logger.info(f"Iniciando servidor en {host}:{port}")
+    
+    # Configurar uvicorn directamente - sin reimportar
+    config = uvicorn.Config(
+        app=app,
+        host=host,
+        port=port,
+        log_level="info"
+    )
+    server = uvicorn.Server(config)
+    server.run()

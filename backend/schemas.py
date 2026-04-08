@@ -69,11 +69,12 @@ class TokenData(BaseModel):
 
 
 class ClientBase(BaseModel):
-    name: str
-    email: str
-    phone: str
-    address: Optional[str] = None
-    tax_id: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=200)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = Field(None, max_length=20)
+    address: Optional[str] = Field(None, max_length=300)
+    # Acepta CUIT con o sin guiones: XX-XXXXXXXX-X o XXXXXXXXXXX o vacio
+    tax_id: Optional[str] = Field(None, pattern=r"^\d{2}-\d{8}-\d{1}$|^\d{11}$|^$")
 
 
 class ClientCreate(ClientBase):
@@ -92,10 +93,10 @@ class Client(ClientBase):
 
 
 class ProductBase(BaseModel):
-    sku: str
-    name: str
-    price: float
-    stock: int
+    sku: str = Field(..., min_length=1, max_length=50)
+    name: str = Field(..., min_length=1, max_length=200)
+    price: float = Field(..., ge=0)  # Mayor o igual a 0
+    stock: int = Field(..., ge=0)    # Mayor o igual a 0
 
 
 class ProductCreate(ProductBase):
@@ -114,11 +115,11 @@ class Product(ProductBase):
 
 
 class MaterialBase(BaseModel):
-    sku: str
-    name: str
-    category: str
-    stock: float
-    unit_cost: float
+    sku: Optional[str] = Field(None, max_length=50)
+    name: str = Field(..., min_length=1, max_length=200)
+    category: str = Field(..., min_length=1, max_length=100)
+    stock: float = Field(..., ge=0)
+    unit_cost: float = Field(..., ge=0)
 
 
 class MaterialCreate(MaterialBase):
@@ -138,13 +139,13 @@ class Material(MaterialBase):
 
 
 class SaleItemCreate(BaseModel):
-    product_id: int
-    quantity: int
+    product_id: int = Field(..., gt=0)  # Mayor que 0
+    quantity: int = Field(..., gt=0)    # Mayor que 0
 
 
 class SaleCreate(BaseModel):
-    client_id: int
-    items: List[SaleItemCreate]
+    client_id: int = Field(..., gt=0)  # Mayor que 0
+    items: List[SaleItemCreate] = Field(..., min_length=1)  # Al menos 1 item
 
 
 class Sale(BaseModel):
@@ -164,16 +165,16 @@ class MaterialMovement(BaseModel):
 
 
 class InvoiceItemCreate(BaseModel):
-    product_id: int
-    quantity: int
-    unit_price: float
+    product_id: int = Field(..., gt=0)
+    quantity: int = Field(..., gt=0)
+    unit_price: float = Field(..., ge=0)
 
 
 class InvoiceCreate(BaseModel):
-    client_id: int
+    client_id: int = Field(..., gt=0)
     sale_id: Optional[int] = None
-    tipo_factura: int = 6
-    items: List[InvoiceItemCreate]
+    tipo_factura: int = Field(..., ge=1, le=11)  # Entre 1 y 11
+    items: List[InvoiceItemCreate] = Field(..., min_length=1)
 
 
 class Invoice(BaseModel):
@@ -319,8 +320,8 @@ class ProduccionEjecutarResponse(BaseModel):
 # ==================== ESQUEMAS DE PRESUPUESTOS ====================
 
 class PresupuestoItemBase(BaseModel):
-    material_id: int
-    cantidad: float
+    material_id: int = Field(..., gt=0)
+    cantidad: float = Field(..., gt=0)
 
 
 class PresupuestoItemCreate(PresupuestoItemBase):
@@ -339,27 +340,27 @@ class PresupuestoItem(PresupuestoItemBase):
 
 
 class PresupuestoBase(BaseModel):
-    nombre: str
-    cliente_nombre: Optional[str] = None
-    cliente_telefono: Optional[str] = None
-    cliente_email: Optional[str] = None
-    costo_mano_obra: float = 0
-    margen: float = 0
-    notas: Optional[str] = None
+    nombre: str = Field(..., min_length=1, max_length=200)
+    cliente_nombre: Optional[str] = Field(None, max_length=200)
+    cliente_telefono: Optional[str] = Field(None, max_length=20)
+    cliente_email: Optional[EmailStr] = None
+    costo_mano_obra: float = Field(0, ge=0)
+    margen: float = Field(0, ge=0)
+    notas: Optional[str] = Field(None, max_length=1000)
 
 
 class PresupuestoCreate(PresupuestoBase):
-    items: List[PresupuestoItemCreate]
+    items: List[PresupuestoItemCreate] = Field(..., min_length=1)
 
 
 class PresupuestoUpdate(BaseModel):
-    nombre: Optional[str] = None
-    cliente_nombre: Optional[str] = None
-    cliente_telefono: Optional[str] = None
-    cliente_email: Optional[str] = None
-    costo_mano_obra: Optional[float] = None
-    margen: Optional[float] = None
-    notas: Optional[str] = None
+    nombre: Optional[str] = Field(None, min_length=1, max_length=200)
+    cliente_nombre: Optional[str] = Field(None, max_length=200)
+    cliente_telefono: Optional[str] = Field(None, max_length=20)
+    cliente_email: Optional[EmailStr] = None
+    costo_mano_obra: Optional[float] = Field(None, ge=0)
+    margen: Optional[float] = Field(None, ge=0)
+    notas: Optional[str] = Field(None, max_length=1000)
     items: Optional[List[PresupuestoItemCreate]] = None
 
 

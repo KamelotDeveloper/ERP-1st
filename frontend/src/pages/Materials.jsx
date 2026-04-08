@@ -12,15 +12,32 @@ export default function Materials() {
   });
   const [editId, setEditId] = useState(null);
   const [error, setError] = useState("");
+  
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 20;
+  const [loading, setLoading] = useState(false);
 
-  const load = async () => {
+  const loadData = async (page = 1) => {
+    setLoading(true);
     try {
-      const r = await api.get("/materials");
-      setData(r.data || []);
+      const token = localStorage.getItem("token");
+      const skip = (page - 1) * itemsPerPage;
+      
+      const [materialsRes, countRes] = await Promise.all([
+        api.get(`/materials?skip=${skip}&limit=${itemsPerPage}`, { headers: { Authorization: `Bearer ${token}` } }),
+        api.get("/materials/count", { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      
+      setData(materialsRes.data || []);
+      setCurrentPage(page);
+      setTotalPages(Math.ceil((countRes.data.count || 0) / itemsPerPage));
     } catch (err) {
       console.error("Error loading materials:", err);
       setError("Error al cargar materiales");
     }
+    setLoading(false);
   };
 
   const save = async () => {
@@ -46,7 +63,7 @@ export default function Materials() {
 
       setForm({ sku: "", name: "", category: "", stock: "", unit_cost: "" });
       setEditId(null);
-      load();
+      loadData(currentPage);
     } catch (err) {
       console.error("Error saving material:", err);
       setError("Error al guardar: " + (err.response?.data?.detail || err.message));
@@ -68,14 +85,14 @@ export default function Materials() {
     if (!confirm("¿Eliminar material?")) return;
     try {
       await api.delete("/materials/" + id);
-      load();
+      loadData(currentPage);
     } catch (err) {
       alert("Error al eliminar");
     }
   };
 
   useEffect(() => {
-    load();
+    loadData(1);
   }, []);
 
   const grouped = data.reduce((acc, item) => {
@@ -165,6 +182,8 @@ export default function Materials() {
         </div>
       </div>
 
+      {loading && <div style={{ textAlign: "center", padding: "10px" }}>Cargando...</div>}
+
       {data.length === 0 && (
         <p style={{ textAlign: "center", padding: "20px" }}>
           No hay materiales cargados. Agrega uno arriba.
@@ -213,6 +232,26 @@ export default function Materials() {
           </table>
         </div>
       ))}
+
+      {totalPages > 1 && (
+        <div className="pagination" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", marginTop: "20px" }}>
+          <button
+            className="btn"
+            onClick={() => loadData(currentPage - 1)}
+            disabled={currentPage === 1}
+          >
+            ← Anterior
+          </button>
+          <span>Página {currentPage} de {totalPages}</span>
+          <button
+            className="btn"
+            onClick={() => loadData(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+          >
+            Siguiente →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

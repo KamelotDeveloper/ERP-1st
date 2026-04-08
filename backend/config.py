@@ -4,9 +4,15 @@ from typing import Optional
 from pydantic_settings import BaseSettings
 
 
+def get_database_url() -> str:
+    """Genera la URL de la base de datos usando paths correctos para PyInstaller."""
+    # Usar path relativo para que funcione desde cualquier directorio
+    return "sqlite:///carpinteria.db"
+
+
 class Settings(BaseSettings):
     # Database - SQLite default for desktop ERP
-    DATABASE_URL: str = "sqlite:///./carpinteria.db"
+    DATABASE_URL: str = get_database_url()
     
     # JWT
     JWT_SECRET_KEY: str = "ga-erp-secret-key-local-desktop-erp"

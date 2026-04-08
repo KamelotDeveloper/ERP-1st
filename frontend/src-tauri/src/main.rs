@@ -11,7 +11,6 @@ fn find_python() -> Option<PathBuf> {
     if let Ok(python_path) = env::var("PYTHON") {
         let p = PathBuf::from(&python_path);
         if p.exists() && Command::new(&p).arg("--version").output().is_ok() {
-            println!("Using PYTHON env: {}", python_path);
             return Some(p);
         }
     }
@@ -24,7 +23,6 @@ fn find_python() -> Option<PathBuf> {
                 if let Some(first_line) = path.lines().next() {
                     let p = PathBuf::from(first_line.trim());
                     if p.exists() {
-                        println!("Found Python via where: {:?}", p);
                         return Some(p);
                     }
                 }
@@ -34,16 +32,18 @@ fn find_python() -> Option<PathBuf> {
 
     // Then check common installation paths on Windows
     let possible_paths = [
-        "python",
-        "python3",
-        "py",
+        r"C:\Python314\python.exe",
+        r"C:\Python313\python.exe",
         r"C:\Python312\python.exe",
         r"C:\Python311\python.exe",
         r"C:\Python310\python.exe",
+        r"C:\Program Files\Python314\python.exe",
+        r"C:\Program Files\Python313\python.exe",
         r"C:\Program Files\Python312\python.exe",
         r"C:\Program Files\Python311\python.exe",
-        r"C:\Users\Giuliano\AppData\Local\Programs\Python\Python312\python.exe",
-        r"C:\Users\Giuliano\AppData\Local\Programs\Python\Python311\python.exe",
+        "python",
+        "python3",
+        "py",
     ];
 
     for path in possible_paths {
@@ -56,33 +56,78 @@ fn find_python() -> Option<PathBuf> {
 }
 
 fn main() {
-    println!("El Menestral ERP Starting...");
-
     let current_exe = std::env::current_exe().unwrap_or_default();
     let exe_dir = current_exe.parent().unwrap_or(&current_exe);
 
+    // Search in multiple locations
     let possible_backend_paths = [
-        exe_dir.join(r"_up_\_up_\backend"),
-        exe_dir.join("backend"),
+        // Same directory as exe
+        exe_dir.to_path_buf(),
+        // Bundle folder
+        exe_dir.join("bundle").join("backend"),
+        // Resources folder
         exe_dir.join("resources").join("backend"),
-        PathBuf::from("backend"),
+        // One level up
+        exe_dir.join("..").to_path_buf(),
+        exe_dir.join("..").join("bundle").join("backend"),
+        exe_dir.join("..").join("resources").join("backend"),
+        // Two levels up
+        exe_dir.join("..").join("..").to_path_buf(),
+        exe_dir.join("..").join("..").join("bundle").join("backend"),
     ];
 
+    let mut backend_exe = None;
     let mut backend_path = None;
+
+    // First, look for the PyInstaller executable
     for path in &possible_backend_paths {
-        let main_py = path.join("main.py");
-        if main_py.exists() {
-            println!("Found backend at: {:?}", main_py);
+        let exe = path.join("ga-erp-backend.exe");
+        println!("Checking for exe at: {:?}", exe);
+        if exe.exists() {
+            backend_exe = Some(exe.clone());
             backend_path = Some(path.clone());
+            println!("Found backend exe at: {:?}", exe);
+            break;
+        }
+
+        // Also check in subdirectory "backend"
+        let exe_in_backend = path.join("backend").join("ga-erp-backend.exe");
+        if exe_in_backend.exists() {
+            backend_exe = Some(exe_in_backend.clone());
+            backend_path = Some(path.join("backend"));
+            println!("Found backend exe at: {:?}", exe_in_backend);
             break;
         }
     }
 
     if let Some(bp) = backend_path {
-        if let Some(python) = find_python() {
+        // Try to use the PyInstaller executable first
+        if let Some(be) = backend_exe {
+            println!("Starting backend from executable: {:?}", be);
+
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+                let _result = Command::new(&be)
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .current_dir(&bp)
+                    .spawn();
+            }
+
+            #[cfg(not(target_os = "windows"))]
+            {
+                let _result = Command::new(&be).current_dir(&bp).spawn();
+            }
+
+            println!("Backend executable started");
+            thread::sleep(Duration::from_secs(4));
+        } else if let Some(python) = find_python() {
+            // Fallback: use Python if exe not found
             println!("Using Python: {:?}", python);
 
-            // Quick check if dependencies work
+            // Check if dependencies work
             let check = Command::new(&python)
                 .arg("-c")
                 .arg("import fastapi, sqlalchemy, uvicorn")
@@ -90,8 +135,6 @@ fn main() {
                 .output();
 
             if check.is_err() || !check.as_ref().unwrap().status.success() {
-                println!("Dependencies missing. Attempting to install...");
-
                 // Try pip install --user
                 let _ = Command::new(&python)
                     .arg("-m")
@@ -114,13 +157,9 @@ fn main() {
                     .arg("python-multipart")
                     .current_dir(&bp)
                     .output();
-
-                println!("Install attempt complete.");
             }
 
             // Start uvicorn with system Python - HIDDEN WINDOW on Windows
-            println!("Starting backend server (hidden)...");
-
             #[cfg(target_os = "windows")]
             {
                 use std::os::windows::process::CommandExt;
@@ -153,7 +192,7 @@ fn main() {
                     .spawn();
             }
 
-            println!("Backend starting...");
+            println!("Backend Python started");
             thread::sleep(Duration::from_secs(4));
         } else {
             println!("Python not found. Please install Python 3.10+");

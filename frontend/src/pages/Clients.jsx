@@ -12,15 +12,32 @@ export default function Clients() {
   });
   const [editId, setEditId] = useState(null);
   const [error, setError] = useState("");
+  
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 20;
+  const [loading, setLoading] = useState(false);
 
-  const load = async () => {
+  const loadData = async (page = 1) => {
+    setLoading(true);
     try {
-      const r = await api.get("/clients");
-      setData(r.data || []);
+      const token = localStorage.getItem("token");
+      const skip = (page - 1) * itemsPerPage;
+      
+      const [clientsRes, countRes] = await Promise.all([
+        api.get(`/clients?skip=${skip}&limit=${itemsPerPage}`, { headers: { Authorization: `Bearer ${token}` } }),
+        api.get("/clients/count", { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      
+      setData(clientsRes.data || []);
+      setCurrentPage(page);
+      setTotalPages(Math.ceil((countRes.data.count || 0) / itemsPerPage));
     } catch (err) {
       console.error("Error loading clients:", err);
       setError("Error al cargar clientes");
     }
+    setLoading(false);
   };
 
   const save = async () => {
@@ -37,7 +54,7 @@ export default function Clients() {
       }
       setForm({ name: "", email: "", phone: "", address: "", tax_id: "" });
       setEditId(null);
-      load();
+      loadData(currentPage);
     } catch (err) {
       console.error("Error saving client:", err);
       setError("Error al guardar: " + (err.response?.data?.detail || err.message));
@@ -59,14 +76,14 @@ export default function Clients() {
     if (!confirm("¿Eliminar cliente?")) return;
     try {
       await api.delete("/clients/" + id);
-      load();
+      loadData(currentPage);
     } catch (err) {
       alert("Error al eliminar");
     }
   };
 
   useEffect(() => {
-    load();
+    loadData(1);
   }, []);
 
   return (
@@ -147,6 +164,8 @@ export default function Clients() {
         </div>
       </div>
 
+      {loading && <div style={{ textAlign: "center", padding: "10px" }}>Cargando...</div>}
+
       <table className="table">
         <thead>
           <tr>
@@ -191,6 +210,26 @@ export default function Clients() {
           )}
         </tbody>
       </table>
+
+      {totalPages > 1 && (
+        <div className="pagination" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", marginTop: "20px" }}>
+          <button
+            className="btn"
+            onClick={() => loadData(currentPage - 1)}
+            disabled={currentPage === 1}
+          >
+            ← Anterior
+          </button>
+          <span>Página {currentPage} de {totalPages}</span>
+          <button
+            className="btn"
+            onClick={() => loadData(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+          >
+            Siguiente →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

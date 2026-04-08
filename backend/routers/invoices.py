@@ -248,8 +248,8 @@ def create_invoice(data: schemas.InvoiceCreate, request: Request, db: Session = 
 
 
 @router.get("/invoices")
-def list_invoices(db: Session = Depends(get_db)):
-    invoices = db.query(models.Invoice).order_by(models.Invoice.fecha.desc()).all()
+def list_invoices(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
+    invoices = db.query(models.Invoice).order_by(models.Invoice.fecha.desc()).offset(skip).limit(limit).all()
     
     result = []
     for inv in invoices:
@@ -267,6 +267,12 @@ def list_invoices(db: Session = Depends(get_db)):
         })
     
     return result
+
+
+@router.get("/invoices/count")
+def count_invoices(db: Session = Depends(get_db)):
+    count = db.query(models.Invoice).count()
+    return {"count": count}
 
 
 @router.get("/invoices/{id}")

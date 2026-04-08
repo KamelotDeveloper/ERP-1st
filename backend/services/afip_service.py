@@ -11,10 +11,12 @@ logger = logging.getLogger(__name__)
 class AfipService:
     """Servicio para interactuar con ARCA/AFIP"""
 
-    WSAA_URL_TEST = "https://wsaa.afip.gov.ar/WS/services/LoginCms"
+    # URLs de homologación (testing) - ARCA
+    WSAA_URL_TEST = "https://wsaahomo.afip.gov.ar/ws/services/LoginCms"
     WSAA_URL_PROD = "https://wsaa.afip.gov.ar/WS/services/LoginCms"
     
-    WSFE_URL_TEST = "https://servicios1.afip.gov.ar/wsfev1/service.asmx"
+    # URLs de homologación (testing) - ARCA
+    WSFE_URL_TEST = "https://wswhomo.afip.gov.ar/wsfev1/service.asmx"
     WSFE_URL_PROD = "https://servicios1.afip.gov.ar/wsfev1/service.asmx"
 
     def __init__(self, cert_path: str = None, key_path: str = None, 

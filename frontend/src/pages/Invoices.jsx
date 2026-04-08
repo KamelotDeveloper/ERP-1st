@@ -12,16 +12,27 @@ export default function Invoices() {
     items: []
   });
   const [loading, setLoading] = useState(false);
+  
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 20;
 
-  const load = async () => {
-    const [invRes, clientsRes, productsRes] = await Promise.all([
-      api.get("/invoices"),
-      api.get("/clients"),
-      api.get("/products")
+  const loadData = async (page = 1) => {
+    const token = localStorage.getItem("token");
+    const skip = (page - 1) * itemsPerPage;
+    
+    const [invRes, clientsRes, productsRes, countRes] = await Promise.all([
+      api.get(`/invoices?skip=${skip}&limit=${itemsPerPage}`, { headers: { Authorization: `Bearer ${token}` } }),
+      api.get("/clients", { headers: { Authorization: `Bearer ${token}` } }),
+      api.get("/products", { headers: { Authorization: `Bearer ${token}` } }),
+      api.get("/invoices/count", { headers: { Authorization: `Bearer ${token}` } })
     ]);
     setInvoices(invRes.data);
     setClients(clientsRes.data);
     setProducts(productsRes.data);
+    setCurrentPage(page);
+    setTotalPages(Math.ceil((countRes.data.count || 0) / itemsPerPage));
   };
 
   const addItem = () => {
@@ -87,7 +98,7 @@ export default function Invoices() {
         tipo_factura: 6,
         items: []
       });
-      load();
+      loadData(currentPage);
       alert("Factura creada correctamente");
     } catch (error) {
       alert("Error al crear factura: " + (error.response?.data?.detail || error.message));
@@ -101,7 +112,7 @@ export default function Invoices() {
   };
 
   useEffect(() => {
-    load();
+    loadData(1);
   }, []);
 
   return (
@@ -223,6 +234,26 @@ export default function Invoices() {
           ))}
         </tbody>
       </table>
+
+      {totalPages > 1 && (
+        <div className="pagination" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", marginTop: "20px" }}>
+          <button
+            className="btn"
+            onClick={() => loadData(currentPage - 1)}
+            disabled={currentPage === 1}
+          >
+            ← Anterior
+          </button>
+          <span>Página {currentPage} de {totalPages}</span>
+          <button
+            className="btn"
+            onClick={() => loadData(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+          >
+            Siguiente →
+          </button>
+        </div>
+      )}
 
       <style>{`
         .invoice-form {
