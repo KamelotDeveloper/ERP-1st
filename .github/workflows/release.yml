@@ -44,12 +44,11 @@ jobs:
         working-directory: ./frontend
         run: npm ci
 
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run tauri build
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: ${{ matrix.args }}
+          TAURI_BUILD_TARGET: ${{ matrix.args }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
