@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { BaseDirectory, mkdir, writeTextFile, writeFile, exists } from "@tauri-apps/plugin-fs";
 import { save } from "@tauri-apps/plugin-dialog";
 
+const API_URL = import.meta.env.VITE_API_URL || "API_URL";
 const FOLDER_NAME = "El Menestral datos";
 
 // Check if we're running in Tauri
@@ -117,7 +118,7 @@ export async function downloadFileFromBackend(url, filename) {
   
   if (!isTauriApp) {
     console.log("Not in Tauri - using browser fallback");
-    window.open("http://127.0.0.1:8000" + url, "_blank");
+    window.open("API_URL" + url, "_blank");
     return { success: true };
   }
   
@@ -130,7 +131,7 @@ export async function downloadFileFromBackend(url, filename) {
     
     if (!folderExists) {
       console.log("Using browser fallback - folder not available");
-      window.open("http://127.0.0.1:8000" + url, "_blank");
+      window.open("API_URL" + url, "_blank");
       return { success: true };
     }
 
@@ -152,7 +153,7 @@ export async function downloadFileFromBackend(url, filename) {
 
     // Download the file from backend and save to path
     console.log("Fetching from backend...");
-    const response = await fetch("http://127.0.0.1:8000" + url, {
+    const response = await fetch("API_URL" + url, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
@@ -179,7 +180,7 @@ export async function downloadFileFromBackend(url, filename) {
   } catch (error) {
     console.error("Error downloading file:", error);
     alert("Error al descargar: " + error.message);
-    window.open("http://127.0.0.1:8000" + url, "_blank");
+    window.open("API_URL" + url, "_blank");
     return { success: true, fallback: true };
   }
 }
