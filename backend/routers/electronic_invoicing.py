@@ -409,3 +409,48 @@ def check_cert_expiry(db: Session = Depends(get_db)):
             "expired": "CERTIFICADO VENCIDO - La facturación no funcionará"
         }.get(alert_level)
     }
+
+
+@router.delete("/certificate")
+def delete_certificate(db: Session = Depends(get_db)):
+    """Eliminar certificados subidos"""
+    config = get_config(db)
+    
+    if not config.cert_path and not config.key_path:
+        return {
+            "success": True,
+            "message": "No hay certificados para eliminar"
+        }
+    
+    # Eliminar archivos físicos
+    errors = []
+    
+    if config.cert_path and os.path.exists(config.cert_path):
+        try:
+            os.remove(config.cert_path)
+        except Exception as e:
+            errors.append(f"Error al eliminar certificado: {str(e)}")
+    
+    if config.key_path and os.path.exists(config.key_path):
+        try:
+            os.remove(config.key_path)
+        except Exception as e:
+            errors.append(f"Error al eliminar clave: {str(e)}")
+    
+    # Limpiar registros en la base de datos
+    config.cert_path = None
+    config.key_path = None
+    config.estado_habilitacion = "pendiente"
+    config.enabled = False
+    config.pasos_completados = None
+    config.errores = None
+    config.fecha_actualizacion = datetime.utcnow()
+    db.commit()
+    
+    logger.info(f"Certificados eliminados para CUIT: {config.CUIT}")
+    
+    return {
+        "success": True if not errors else False,
+        "message": "Certificados eliminados correctamente",
+        "errors": errors if errors else None
+    }

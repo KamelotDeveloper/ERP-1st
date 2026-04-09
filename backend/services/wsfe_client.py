@@ -4,7 +4,7 @@ import base64
 import hashlib
 import subprocess
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization, hashes
@@ -59,9 +59,15 @@ class WSAAClient:
     
     def _create_tra(self) -> str:
         """Crea el Ticket de Requerimiento de Acceso (TRA)"""
-        unique_id = str(int(datetime.now().timestamp()))
-        generation_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S-00:00")
-        expiration_time = (datetime.utcnow() + timedelta(hours=12)).strftime("%Y-%m-%dT%H:%M:%S-00:00")
+        unique_id = str(int(datetime.now(timezone.utc).timestamp()))
+        now = datetime.now(timezone.utc)
+        expiration = now + timedelta(hours=12)
+        # ARCA espera formato ISO 8601 con timezone
+        generation_time = now.strftime("%Y-%m-%dT%H:%M:%S%z")
+        expiration_time = expiration.strftime("%Y-%m-%dT%H:%M:%S%z")
+        # Asegurar formato con dos puntos en timezone (ej: -03:00)
+        generation_time = generation_time[:-2] + ":" + generation_time[-2:]
+        expiration_time = expiration_time[:-2] + ":" + expiration_time[-2:]
         
         tra = f"""<?xml version="1.0" encoding="UTF-8"?>
 <loginTicketRequest version="1.0">
@@ -243,7 +249,7 @@ class WSAAClient:
             if token_elem is not None and sign_elem is not None:
                 self._token = token_elem.text
                 self._sign = sign_elem.text
-                self._token_expiration = datetime.now() + timedelta(hours=12)
+                self._token_expiration = datetime.now(timezone.utc) + timedelta(hours=12)
                 
                 logger.info("Token WSAA obtenido exitosamente")
                 
@@ -270,7 +276,7 @@ class WSAAClient:
     def get_valid_token(self) -> Optional[Dict[str, Any]]:
         """Obtiene un token válido, reutilizando si aún es vigente"""
         if self._token and self._token_expiration:
-            if datetime.now() < self._token_expiration:
+            if datetime.now(timezone.utc) < self._token_expiration:
                 return {
                     "success": True,
                     "token": self._token,

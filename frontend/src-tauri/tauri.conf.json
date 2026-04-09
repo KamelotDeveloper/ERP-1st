@@ -5,7 +5,7 @@
   "identifier": "com.menestral.erp",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "",
+    "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },
@@ -29,6 +29,21 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "resources": {
+      "../../backend/main.py": "backend/main.py",
+      "../../backend/models.py": "backend/models.py",
+      "../../backend/schemas.py": "backend/schemas.py",
+      "../../backend/database.py": "backend/database.py",
+      "../../backend/config.py": "backend/config.py",
+      "../../backend/requirements.txt": "backend/requirements.txt",
+      "../../backend/alembic": "backend/alembic",
+      "../../backend/alembic.ini": "backend/alembic.ini",
+      "../../backend/.env": "backend/.env",
+      "../../backend/routers": "backend/routers",
+      "../../backend/services": "backend/services",
+      "../../backend/certs": "backend/certs",
+      "../../backend/utils": "backend/utils"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

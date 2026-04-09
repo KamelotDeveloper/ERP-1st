@@ -71,34 +71,38 @@ fn main() {
 
     // Search in multiple locations
     let possible_backend_paths = [
-        // Same directory as exe
+        // Same directory as exe (development build)
         exe_dir.to_path_buf(),
-        // Resources folder (for bundled apps)
+        // Backend in same folder as exe (direct build output)
+        exe_dir.join("backend"),
+        // Resources folder (for bundled apps) - Tauri puts resources here
         resources_dir.join("backend"),
+        resources_dir.to_path_buf(),
+        // Direct in resources
+        exe_dir.join("resources").join("backend"),
+        exe_dir.join("resources"),
+        // NSIS installer structure - one level up from exe in release
+        exe_dir.join("..").join("resources").join("backend"),
+        exe_dir.join("..").join("resources"),
+        exe_dir.join("..").to_path_buf(),
         // Bundle folder
         exe_dir.join("bundle").join("backend"),
-        // One level up
-        exe_dir.join("..").to_path_buf(),
-        exe_dir.join("..").join("bundle").join("backend"),
-        exe_dir.join("..").join("resources").join("backend"),
-        // Two levels up
-        exe_dir.join("..").join("..").to_path_buf(),
-        exe_dir.join("..").join("..").join("bundle").join("backend"),
-        exe_dir
-            .join("..")
-            .join("..")
-            .join("resources")
-            .join("backend"),
+        exe_dir.join("bundle"),
     ];
 
     let mut backend_exe = None;
     let mut backend_path = None;
     let mut python_backend = None;
 
+    println!("Searching for backend...");
+    println!("Exe dir: {:?}", exe_dir);
+    println!("Resources dir: {:?}", resources_dir);
+
     // First, look for the PyInstaller executable
     for path in &possible_backend_paths {
+        println!("Checking path: {:?}", path);
+
         let exe = path.join("ga-erp-backend.exe");
-        println!("Checking for exe at: {:?}", exe);
         if exe.exists() {
             backend_exe = Some(exe.clone());
             backend_path = Some(path.clone());
@@ -115,7 +119,16 @@ fn main() {
             break;
         }
 
-        // Check for Python main.py in backend folder
+        // Check in dist subfolder (PyInstaller output)
+        let exe_in_dist = path.join("dist").join("ga-erp-backend.exe");
+        if exe_in_dist.exists() {
+            backend_exe = Some(exe_in_dist.clone());
+            backend_path = Some(path.join("dist"));
+            println!("Found backend exe at: {:?}", exe_in_dist);
+            break;
+        }
+
+        // Check for Python main.py in backend folder (IN resources/backend/)
         let py_main = path.join("main.py");
         if py_main.exists() {
             python_backend = Some(path.clone());

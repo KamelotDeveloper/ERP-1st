@@ -339,9 +339,9 @@ export default function Budget() {
       </tr>
     </thead>
     <tbody>
-      ${p.items.map((item, i) => `
+      ${(Array.isArray(p.items) ? p.items : []).map((item, i) => `
       <tr>
-        <td>${item.material?.name || item.material_name || 'Material'}</td>
+        <td>${(item.material && item.material.name) || item.material_name || 'Material'}</td>
         <td class="center">${item.cantidad}</td>
         <td class="right">$${(item.precio_unitario || 0).toLocaleString('es-AR')}</td>
         <td class="right">$${(item.subtotal || 0).toLocaleString('es-AR')}</td>
@@ -746,9 +746,9 @@ export default function Budget() {
               </tr>
             </thead>
             <tbody>
-              {detallePresupuesto.items?.map((item, i) => (
+              {Array.isArray(detallePresupuesto.items) && detallePresupuesto.items.map((item, i) => (
                 <tr key={i}>
-                  <td>{item.material?.name || item.material_name || "Material"}</td>
+                  <td>{(item.material && item.material.name) || item.material_name || "Material"}</td>
                   <td>{item.cantidad}</td>
                   <td>${(item.precio_unitario || 0).toLocaleString()}</td>
                   <td>${(item.subtotal || 0).toLocaleString()}</td>

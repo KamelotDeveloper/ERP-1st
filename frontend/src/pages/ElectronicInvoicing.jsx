@@ -83,6 +83,25 @@ export default function ElectronicInvoicing() {
     setLoading(false);
   };
 
+  const deleteCertificate = async () => {
+    if (!confirm("¿Estás seguro de eliminar los certificados? Perderás la configuración de facturación electrónica.")) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.delete("/electronic-invoicing/certificate");
+      setMessage(res.data);
+      if (res.data.success) {
+        setStep(2);
+        setFiles({ certificado: null, clave_privada: null });
+      }
+      loadStatus();
+    } catch (err) {
+      alert(err.response?.data?.detail || "Error al eliminar certificados");
+    }
+    setLoading(false);
+  };
+
   const testConnection = async () => {
     setLoading(true);
     try {
@@ -264,6 +283,14 @@ export default function ElectronicInvoicing() {
               Sube el certificado .pem y la clave privada que obtuviste de ARCA/AFIP
             </p>
             
+            <button 
+              className="btn" 
+              onClick={() => setStep(1)}
+              style={{ marginRight: "10px" }}
+            >
+              ← Volver
+            </button>
+            
             <div className="form-group">
               <label>Certificado (archivo .pem)</label>
               <input 
@@ -291,6 +318,15 @@ export default function ElectronicInvoicing() {
             >
               {loading ? "Validando..." : "Subir y Validar"}
             </button>
+            
+            <button 
+              className="btn btn-delete" 
+              onClick={deleteCertificate}
+              disabled={loading}
+              style={{ marginLeft: "10px" }}
+            >
+              Eliminar Certificados
+            </button>
           </div>
         )}
 
@@ -300,6 +336,14 @@ export default function ElectronicInvoicing() {
             <p style={{ color: "#6b7280", marginBottom: "15px" }}>
               Se probará la conexión con los servidores de ARCA
             </p>
+            
+            <button 
+              className="btn" 
+              onClick={() => setStep(2)}
+              style={{ marginRight: "10px" }}
+            >
+              ← Volver
+            </button>
             
             {status?.credenciales && (
               <div className="cred-check" style={{ 

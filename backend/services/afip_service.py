@@ -1,7 +1,7 @@
 import os
 import json
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 import logging
 
@@ -81,7 +81,7 @@ class AfipService:
                 cert = x509.load_pem_x509_certificate(cert_data)
                 
             expiration = cert.not_valid_after_utc
-            days_until_expiry = (expiration - datetime.now()).days
+            days_until_expiry = (expiration - datetime.now(timezone.utc)).days
             
             is_valid = days_until_expiry > 0
             
@@ -130,7 +130,7 @@ class AfipService:
             "success": True,
             "message": "Conexión verificada correctamente",
             "ambiente": self.ambiente,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     def request_cae(self, invoice_data: Dict[str, Any]) -> Dict[str, Any]:
