@@ -146,12 +146,7 @@ def count_products(db: Session = Depends(get_db)):
 @router.get("/products/alertas")
 def get_alertas_productos(db: Session = Depends(get_db)):
     """Get products with low stock (stock <= stock_minimo and stock_minimo > 0)"""
-    productos = db.query(
-        models.Product.id,
-        models.Product.name,
-        models.Product.stock,
-        models.Product.stock_minimo
-    ).filter(
+    productos = db.query(models.Product).filter(
         models.Product.stock <= models.Product.stock_minimo,
         models.Product.stock_minimo > 0
     ).order_by(
@@ -312,13 +307,7 @@ def count_materials(db: Session = Depends(get_db)):
 @router.get("/materials/alertas")
 def get_alertas_stock(db: Session = Depends(get_db)):
     """Get materials with low stock (stock <= stock_minimo and stock_minimo > 0)"""
-    materiales = db.query(
-        models.Material.id,
-        models.Material.name,
-        models.Material.category,
-        models.Material.current_stock,
-        models.Material.stock_minimo
-    ).filter(
+    materiales = db.query(models.Material).filter(
         models.Material.current_stock <= models.Material.stock_minimo,
         models.Material.stock_minimo > 0
     ).order_by(
