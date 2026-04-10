@@ -282,6 +282,34 @@ def count_materials(db: Session = Depends(get_db)):
     return {"count": count}
 
 
+@router.get("/materials/alertas")
+def get_alertas_stock(db: Session = Depends(get_db)):
+    """Get materials with low stock (stock <= stock_minimo and stock_minimo > 0)"""
+    materiales = db.query(
+        models.Material.id,
+        models.Material.name,
+        models.Material.category,
+        models.Material.current_stock,
+        models.Material.stock_minimo
+    ).filter(
+        models.Material.current_stock <= models.Material.stock_minimo,
+        models.Material.stock_minimo > 0
+    ).order_by(
+        (models.Material.stock_minimo - models.Material.current_stock).desc()
+    ).all()
+    
+    return [
+        {
+            "id": m.id,
+            "nombre": m.name,
+            "categoria": m.category,
+            "stock": m.current_stock,
+            "stock_minimo": m.stock_minimo
+        }
+        for m in materiales
+    ]
+
+
 @router.put("/materials/{id}")
 def update_material(
     id: int,
@@ -298,6 +326,7 @@ def update_material(
     material.name = data.name
     material.category = data.category
     material.unit_cost = data.unit_cost
+    material.stock_minimo = data.stock_minimo
 
     total_in = db.query(func.sum(models.MaterialMovement.quantity)).filter(
         models.MaterialMovement.material_id == id,

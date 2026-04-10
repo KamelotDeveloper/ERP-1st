@@ -1,5 +1,6 @@
 import {useEffect,useState} from "react"
 import api from "../services/api"
+import {useAlertasStock} from "../services/useAlertasStock"
 
 import{
 BarChart,
@@ -16,6 +17,8 @@ ResponsiveContainer
 export default function Dashboard(){
 
 const [data,setData]=useState(null)
+const [showAlertas, setShowAlertas] = useState(false)
+const { alertas, count } = useAlertasStock();
 
 const load=async()=>{
 const r=await api.get("/dashboard")
@@ -42,7 +45,53 @@ return(
 
 <div className="container">
 
-<h1>Dashboard</h1>
+<h1>Dashboard {count > 0 && (
+  <span 
+    onClick={() => setShowAlertas(!showAlertas)}
+    style={{ 
+      cursor: "pointer", 
+      marginLeft: "15px",
+      padding: "5px 12px",
+      background: "#ef4444",
+      color: "white",
+      borderRadius: "12px",
+      fontSize: "14px"
+    }}
+  >
+    ⚠ {count} alerta{count !== 1 ? 's' : ''}
+  </span>
+)}
+
+{showAlertas && count > 0 && (
+  <div style={{ 
+    marginTop: "15px", 
+    padding: "15px", 
+    background: "#fef2f2", 
+    border: "1px solid #fecaca",
+    borderRadius: "8px"
+  }}>
+    <h4 style={{ margin: "0 0 10px 0", color: "#991b1b" }}>Materiales con stock bajo:</h4>
+    {alertas.map(a => (
+      <div key={a.id} style={{ 
+        display: "flex", 
+        alignItems: "center", 
+        gap: "8px", 
+        padding: "8px 0",
+        borderBottom: "1px solid #fecaca"
+      }}>
+        <span style={{
+          width: "8px",
+          height: "8px",
+          borderRadius: "50%",
+          background: a.stock === 0 ? "#ef4444" : "#f59e0b"
+        }}></span>
+        <span style={{ flex: 1 }}>{a.nombre}</span>
+        <span style={{ color: "#666" }}>Stock: {a.stock} / Min: {a.stock_minimo}</span>
+      </div>
+    ))}
+  </div>
+)}
+</h1>
 
 <div className="dashboard-grid">
 

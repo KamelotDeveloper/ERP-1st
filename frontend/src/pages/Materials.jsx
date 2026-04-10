@@ -9,6 +9,7 @@ export default function Materials() {
     category: "",
     stock: "",
     unit_cost: "",
+    stock_minimo: "",
   });
   const [editId, setEditId] = useState(null);
   const [error, setError] = useState("");
@@ -53,6 +54,7 @@ export default function Materials() {
         category: form.category,
         stock: parseFloat(form.stock) || 0,
         unit_cost: parseFloat(form.unit_cost) || 0,
+        stock_minimo: parseInt(form.stock_minimo) || 0,
       };
 
       if (editId) {
@@ -61,7 +63,7 @@ export default function Materials() {
         await api.post("/materials", payload);
       }
 
-      setForm({ sku: "", name: "", category: "", stock: "", unit_cost: "" });
+      setForm({ sku: "", name: "", category: "", stock: "", unit_cost: "", stock_minimo: "" });
       setEditId(null);
       loadData(currentPage);
     } catch (err) {
@@ -77,6 +79,7 @@ export default function Materials() {
       category: m.category || "",
       stock: String(m.stock || ""),
       unit_cost: String(m.unit_cost || ""),
+      stock_minimo: String(m.stock_minimo || ""),
     });
     setEditId(m.id);
   };
@@ -163,6 +166,17 @@ export default function Materials() {
           />
         </div>
 
+        <div className="form-group">
+          <label>Stock mínimo:</label>
+          <input
+            type="number"
+            min="0"
+            value={form.stock_minimo}
+            onChange={(e) => setForm({ ...form, stock_minimo: e.target.value })}
+            placeholder="0"
+          />
+        </div>
+
         <div className="form-group" style={{ justifyContent: "flex-end" }}>
           <button className="btn btn-save" onClick={save}>
             {editId ? "Actualizar" : "Crear"}
@@ -172,7 +186,7 @@ export default function Materials() {
               className="btn"
               onClick={() => {
                 setEditId(null);
-                setForm({ sku: "", name: "", category: "", stock: "", unit_cost: "" });
+                setForm({ sku: "", name: "", category: "", stock: "", unit_cost: "", stock_minimo: "" });
               }}
               style={{ marginLeft: "5px" }}
             >
