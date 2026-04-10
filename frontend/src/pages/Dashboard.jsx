@@ -70,9 +70,9 @@ return(
     border: "1px solid #fecaca",
     borderRadius: "8px"
   }}>
-    <h4 style={{ margin: "0 0 10px 0", color: "#991b1b" }}>Materiales con stock bajo:</h4>
+    <h4 style={{ margin: "0 0 10px 0", color: "#991b1b" }}>Stock bajo (materiales y productos):</h4>
     {alertas.map(a => (
-      <div key={a.id} style={{ 
+      <div key={a.id + a.tipo} style={{ 
         display: "flex", 
         alignItems: "center", 
         gap: "8px", 
@@ -85,6 +85,15 @@ return(
           borderRadius: "50%",
           background: a.stock === 0 ? "#ef4444" : "#f59e0b"
         }}></span>
+        <span style={{ 
+          fontSize: "11px", 
+          padding: "2px 6px", 
+          background: a.tipo === 'producto' ? "#3b82f6" : "#8b5cf6",
+          color: "white",
+          borderRadius: "4px"
+        }}>
+          {a.tipo === 'producto' ? 'Prod' : 'Mat'}
+        </span>
         <span style={{ flex: 1 }}>{a.nombre}</span>
         <span style={{ color: "#666" }}>Stock: {a.stock} / Min: {a.stock_minimo}</span>
       </div>

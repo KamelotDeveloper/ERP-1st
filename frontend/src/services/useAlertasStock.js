@@ -7,8 +7,15 @@ export function useAlertasStock() {
 
   const fetchAlertas = async () => {
     try {
-      const res = await api.get("/materials/alertas");
-      setAlertas(res.data);
+      const [matRes, prodRes] = await Promise.all([
+        api.get("/materials/alertas"),
+        api.get("/products/alertas")
+      ]);
+      
+      const materialAlertas = matRes.data.map(m => ({ ...m, tipo: 'material' }));
+      const productAlertas = prodRes.data.map(p => ({ ...p, tipo: 'producto' }));
+      
+      setAlertas([...materialAlertas, ...productAlertas]);
     } catch (err) {
       console.error("Error fetching alertas:", err);
     } finally {
