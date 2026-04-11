@@ -41,8 +41,7 @@
       "../../backend/.env": "backend/.env",
       "../../backend/routers": "backend/routers",
       "../../backend/services": "backend/services",
-      "../../backend/certs": "backend/certs",
-      "../../backend/utils": "backend/utils"
+      "../../backend/certs": "backend/certs"
     },
     "icon": [
       "icons/32x32.png",

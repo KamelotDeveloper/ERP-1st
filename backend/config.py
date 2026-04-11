@@ -2,12 +2,15 @@ import os
 from functools import lru_cache
 from typing import Optional
 from pydantic_settings import BaseSettings
+import pathlib
 
 
 def get_database_url() -> str:
-    """Genera la URL de la base de datos usando paths correctos para PyInstaller."""
-    # Usar path relativo para que funcione desde cualquier directorio
-    return "sqlite:///carpinteria.db"
+    """Genera la URL de la base de datos usando paths absolutos."""
+    # Usar path absoluto basado en la ubicación del archivo de configuración
+    base_dir = pathlib.Path(__file__).parent.resolve()
+    db_path = base_dir / "carpinteria.db"
+    return f"sqlite:///{db_path}"
 
 
 class Settings(BaseSettings):

@@ -143,6 +143,28 @@ def count_products(db: Session = Depends(get_db)):
     return {"count": count}
 
 
+@router.get("/products/alertas")
+def get_alertas_productos(db: Session = Depends(get_db)):
+    """Get products with low stock"""
+    productos = db.query(models.Product).filter(
+        models.Product.stock <= models.Product.stock_minimo,
+        models.Product.stock_minimo > 0
+    ).order_by(
+        (models.Product.stock_minimo - models.Product.stock).desc()
+    ).all()
+    
+    return [
+        {
+            "id": p.id,
+            "nombre": p.name,
+            "stock": p.stock,
+            "stock_minimo": p.stock_minimo,
+            "tipo": "producto"
+        }
+        for p in productos
+    ]
+
+
 @router.put("/products/{id}")
 def update_product(
     id: int,
@@ -215,17 +237,18 @@ def create_material(
         sku=data.sku,
         name=data.name,
         category=data.category,
-        unit_cost=data.unit_cost
+        unit_cost=data.unit_cost,
+        stock_minimo=data.stock_minimo or 0
     )
 
     db.add(material)
     db.flush()   # obtiene el ID sin hacer commit
 
-    if data.stock and data.stock > 0:
+    if data.current_stock and data.current_stock > 0:
 
         movement = models.MaterialMovement(
             material_id=material.id,
-            quantity=data.stock,
+            quantity=data.current_stock,
             type="IN"
         )
 
@@ -269,7 +292,8 @@ def list_materials(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)
             "name": m.name,
             "category": m.category,
             "unit_cost": m.unit_cost,
-            "stock": stock,
+            "current_stock": stock,
+            "stock_minimo": m.stock_minimo,
             "total_value": total_value
         })
 
@@ -280,6 +304,29 @@ def list_materials(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)
 def count_materials(db: Session = Depends(get_db)):
     count = db.query(models.Material).count()
     return {"count": count}
+
+
+@router.get("/materials/alertas")
+def get_alertas_materiales(db: Session = Depends(get_db)):
+    """Get materials with low stock"""
+    materiales = db.query(models.Material).filter(
+        models.Material.current_stock <= models.Material.stock_minimo,
+        models.Material.stock_minimo > 0
+    ).order_by(
+        (models.Material.stock_minimo - models.Material.current_stock).desc()
+    ).all()
+    
+    return [
+        {
+            "id": m.id,
+            "nombre": m.name,
+            "categoria": m.category,
+            "stock": m.current_stock,
+            "stock_minimo": m.stock_minimo,
+            "tipo": "material"
+        }
+        for m in materiales
+    ]
 
 
 @router.put("/materials/{id}")
@@ -298,6 +345,7 @@ def update_material(
     material.name = data.name
     material.category = data.category
     material.unit_cost = data.unit_cost
+    material.stock_minimo = data.stock_minimo or 0
 
     total_in = db.query(func.sum(models.MaterialMovement.quantity)).filter(
         models.MaterialMovement.material_id == id,
@@ -310,7 +358,7 @@ def update_material(
     ).scalar() or 0
 
     current_stock = total_in - total_out
-    diff = data.stock - current_stock
+    diff = data.current_stock - current_stock
 
     if diff != 0:
 

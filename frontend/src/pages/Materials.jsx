@@ -7,8 +7,9 @@ export default function Materials() {
     sku: "",
     name: "",
     category: "",
-    stock: "",
+    current_stock: "",
     unit_cost: "",
+    stock_minimo: "",
   });
   const [editId, setEditId] = useState(null);
   const [error, setError] = useState("");
@@ -51,8 +52,9 @@ export default function Materials() {
         sku: form.sku,
         name: form.name,
         category: form.category,
-        stock: parseFloat(form.stock) || 0,
+        current_stock: parseFloat(form.current_stock) || 0,
         unit_cost: parseFloat(form.unit_cost) || 0,
+        stock_minimo: parseInt(form.stock_minimo) || 0,
       };
 
       if (editId) {
@@ -61,7 +63,7 @@ export default function Materials() {
         await api.post("/materials", payload);
       }
 
-      setForm({ sku: "", name: "", category: "", stock: "", unit_cost: "" });
+      setForm({ sku: "", name: "", category: "", current_stock: "", unit_cost: "", stock_minimo: "" });
       setEditId(null);
       loadData(currentPage);
     } catch (err) {
@@ -75,8 +77,9 @@ export default function Materials() {
       sku: m.sku || "",
       name: m.name || "",
       category: m.category || "",
-      stock: String(m.stock || ""),
+      current_stock: String(m.current_stock || ""),
       unit_cost: String(m.unit_cost || ""),
+      stock_minimo: String(m.stock_minimo || ""),
     });
     setEditId(m.id);
   };
@@ -146,8 +149,8 @@ export default function Materials() {
           <input
             type="number"
             step="0.01"
-            value={form.stock}
-            onChange={(e) => setForm({ ...form, stock: e.target.value })}
+            value={form.current_stock}
+            onChange={(e) => setForm({ ...form, current_stock: e.target.value })}
             placeholder="0"
           />
         </div>
@@ -163,6 +166,17 @@ export default function Materials() {
           />
         </div>
 
+        <div className="form-group">
+          <label>Stock mín:</label>
+          <input
+            type="number"
+            min="0"
+            value={form.stock_minimo}
+            onChange={(e) => setForm({ ...form, stock_minimo: e.target.value })}
+            placeholder="0"
+          />
+        </div>
+
         <div className="form-group" style={{ justifyContent: "flex-end" }}>
           <button className="btn btn-save" onClick={save}>
             {editId ? "Actualizar" : "Crear"}
@@ -172,7 +186,7 @@ export default function Materials() {
               className="btn"
               onClick={() => {
                 setEditId(null);
-                setForm({ sku: "", name: "", category: "", stock: "", unit_cost: "" });
+                setForm({ sku: "", name: "", category: "", current_stock: "", unit_cost: "", stock_minimo: "" });
               }}
               style={{ marginLeft: "5px" }}
             >
@@ -201,6 +215,7 @@ export default function Materials() {
                 <th>SKU</th>
                 <th>Nombre</th>
                 <th>Stock</th>
+                <th>Stock mín</th>
                 <th>Costo unit.</th>
                 <th>Total</th>
                 <th>Acciones</th>
@@ -213,9 +228,10 @@ export default function Materials() {
                   <td>{i.id}</td>
                   <td>{i.sku || "-"}</td>
                   <td>{i.name}</td>
-                  <td>{i.stock}</td>
+                  <td>{i.current_stock}</td>
+                  <td>{i.stock_minimo || 0}</td>
                   <td>${i.unit_cost}</td>
-                  <td>${((i.stock || 0) * (i.unit_cost || 0)).toFixed(2)}</td>
+                  <td>${((i.current_stock || 0) * (i.unit_cost || 0)).toFixed(2)}</td>
                   <td>
                     <div className="action-buttons">
                       <button className="btn btn-edit" onClick={() => edit(i)}>

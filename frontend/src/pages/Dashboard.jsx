@@ -16,10 +16,23 @@ ResponsiveContainer
 export default function Dashboard(){
 
 const [data,setData]=useState(null)
+const [alertas,setAlertas]=useState({productos:[],materiales:[]})
 
 const load=async()=>{
 const r=await api.get("/dashboard")
 setData(r.data)
+// Cargar alertas de stock
+const token=localStorage.getItem("token")
+const opts={headers:{Authorization:`Bearer ${token}`}}
+try{
+const[p,m]=await Promise.all([
+api.get("/products/alertas",opts),
+api.get("/materials/alertas",opts)
+])
+setAlertas({productos:p.data||[],materiales:m.data||[]})
+}catch(err){
+console.error("Error cargando alertas:",err)
+}
 }
 
 useEffect(()=>{load()},[])
@@ -67,6 +80,46 @@ return(
 </div>
 
 </div>
+
+{(alertas.productos.length>0 || alertas.materiales.length>0) && (
+<div className="alertas-stock">
+<h3>Alertas de Stock</h3>
+
+{alertas.productos.length>0 && (
+<div className="alerta-seccion">
+<h4>Productos bajo stock mínimo</h4>
+<table className="table">
+<thead><tr><th>Producto</th><th>Stock actual</th><th>Stock mínimo</th></tr></thead>
+<tbody>
+{alertas.productos.slice(0,5).map(p=>(
+<tr key={p.id}>
+<td>{p.name}</td>
+<td style={{color:p.stock<=p.stock_minimo?"red":""}}>{p.stock}</td>
+<td>{p.stock_minimo}</td>
+</tr>
+))}
+</tbody>
+</table>
+</div>)}
+
+{alertas.materiales.length>0 && (
+<div className="alerta-seccion">
+<h4>Materiales bajo stock mínimo</h4>
+<table className="table">
+<thead><tr><th>Material</th><th>Stock actual</th><th>Stock mínimo</th></tr></thead>
+<tbody>
+{alertas.materiales.slice(0,5).map(m=>(
+<tr key={m.id}>
+<td>{m.name}</td>
+<td style={{color:m.current_stock<=m.stock_minimo?"red":""}}>{m.current_stock}</td>
+<td>{m.stock_minimo}</td>
+</tr>
+))}
+</tbody>
+</table>
+</div>)}
+</div>
+)}
 
 
 <div className="charts-grid">

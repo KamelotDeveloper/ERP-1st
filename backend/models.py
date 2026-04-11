@@ -45,6 +45,7 @@ class Product(Base):
     name=Column(String, nullable=False)
     price=Column(Float, nullable=False)
     stock=Column(Integer, default=0)
+    stock_minimo=Column(Integer, default=0)
     version=Column(Integer, default=1)
     updated_at=Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -58,6 +59,7 @@ class Material(Base):
     category=Column(String)
     unit_cost=Column(Float, default=0)
     current_stock=Column(Float, default=0)
+    stock_minimo=Column(Integer, default=0)
     version=Column(Integer, default=1)
     updated_at=Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -313,6 +313,29 @@ font-weight:bold;
 margin-top:10px;
 }
 
+/* ===== ALERTAS DE STOCK ===== */
+
+.alertas-stock{
+background:#fff3cd;
+border:1px solid #ffc107;
+border-radius:10px;
+padding:20px;
+margin-top:30px;
+}
+
+.alertas-stock h3{
+color:#856404;
+margin-top:0;
+}
+
+.alerta-seccion{
+margin-top:15px;
+}
+
+.alerta-seccion h4{
+color:#856404;
+margin-bottom:10px;
+}
 
 /* ===== CHARTS ===== */
 
