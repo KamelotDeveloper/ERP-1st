@@ -3,7 +3,7 @@ import api from "../services/api";
 
 export default function Products() {
   const [data, setData] = useState([]);
-  const [form, setForm] = useState({ sku: "", name: "", price: "", stock: "", stock_minimo: "" });
+  const [form, setForm] = useState({ sku: "", name: "", price: "", stock: "" });
   const [editId, setEditId] = useState(null);
   const [error, setError] = useState("");
   
@@ -42,7 +42,6 @@ export default function Products() {
         name: form.name,
         price: parseFloat(form.price) || 0,
         stock: parseInt(form.stock) || 0,
-        stock_minimo: parseInt(form.stock_minimo) || 0,
       };
 
       if (editId) {
@@ -51,7 +50,7 @@ export default function Products() {
         await api.post("/products", productData);
       }
 
-      setForm({ sku: "", name: "", price: "", stock: "", stock_minimo: "" });
+      setForm({ sku: "", name: "", price: "", stock: "" });
       setEditId(null);
       loadData(currentPage);
     } catch (err) {
@@ -66,7 +65,6 @@ export default function Products() {
       name: p.name || "",
       price: String(p.price || ""),
       stock: String(p.stock || ""),
-      stock_minimo: String(p.stock_minimo || ""),
     });
     setEditId(p.id);
   };
@@ -148,17 +146,6 @@ export default function Products() {
           />
         </div>
 
-        <div className="form-group">
-          <label>Stock mínimo:</label>
-          <input
-            type="number"
-            min="0"
-            value={form.stock_minimo}
-            onChange={(e) => setForm({ ...form, stock_minimo: e.target.value })}
-            placeholder="0"
-          />
-        </div>
-
         <div className="form-group" style={{ justifyContent: "flex-end" }}>
           <button className="btn btn-save" onClick={save}>
             {editId ? "Actualizar" : "Crear"}
@@ -168,7 +155,7 @@ export default function Products() {
               className="btn"
               onClick={() => {
                 setEditId(null);
-                setForm({ sku: "", name: "", price: "", stock: "", stock_minimo: "" });
+                setForm({ sku: "", name: "", price: "", stock: "" });
               }}
               style={{ marginLeft: "5px" }}
             >

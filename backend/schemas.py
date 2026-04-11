@@ -97,7 +97,6 @@ class ProductBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     price: float = Field(..., ge=0)  # Mayor o igual a 0
     stock: int = Field(..., ge=0)    # Mayor o igual a 0
-    stock_minimo: int = Field(0, ge=0)
 
 
 class ProductCreate(ProductBase):
@@ -121,7 +120,6 @@ class MaterialBase(BaseModel):
     category: str = Field(..., min_length=1, max_length=100)
     stock: float = Field(..., ge=0)
     unit_cost: float = Field(..., ge=0)
-    stock_minimo: int = Field(0, ge=0)
 
 
 class MaterialCreate(MaterialBase):

@@ -1,6 +1,5 @@
 import {useEffect,useState} from "react"
 import api from "../services/api"
-import {useAlertasStock} from "../services/useAlertasStock"
 
 import{
 BarChart,
@@ -17,17 +16,6 @@ ResponsiveContainer
 export default function Dashboard(){
 
 const [data,setData]=useState(null)
-const [showAlertas, setShowAlertas] = useState(false)
-const [alertaCerrada, setAlertaCerrada] = useState(() => {
-  const saved = localStorage.getItem("alerta_stock_cerrada");
-  const savedTime = localStorage.getItem("alerta_stock_timestamp");
-  // Re-open if last dismiss was more than 5 minutes ago or never shown
-  if (!saved || !savedTime) return false;
-  const fiveMinAgo = Date.now() - (5 * 60 * 1000);
-  return parseInt(savedTime) > fiveMinAgo && saved === "true";
-})
-
-const { alertas, count } = useAlertasStock();
 
 const load=async()=>{
 const r=await api.get("/dashboard")
@@ -35,15 +23,6 @@ setData(r.data)
 }
 
 useEffect(()=>{load()},[])
-
-// Show alert when there are alertas and it wasn't manually closed
-const mostrarAlerta = count > 0 && !alertaCerrada;
-
-const cerrarAlerta = () => {
-  setAlertaCerrada(true);
-  localStorage.setItem("alerta_stock_cerrada", "true");
-  localStorage.setItem("alerta_stock_timestamp", Date.now().toString());
-};
 
 if(!data){
 return <div className="container">Cargando dashboard...</div>
@@ -63,131 +42,7 @@ return(
 
 <div className="container">
 
-{mostrarAlerta && (
-  <div style={{ 
-    marginBottom: "15px", 
-    padding: "15px", 
-    background: "#fef2f2", 
-    border: "1px solid #fecaca",
-    borderRadius: "8px"
-  }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <h4 style={{ margin: 0, color: "#991b1b" }}>
-        ⚠ Stock bajo: {count} item{count !== 1 ? 's' : ''}
-      </h4>
-      <button 
-        onClick={cerrarAlerta}
-        style={{ 
-          background: "none", 
-          border: "none", 
-          cursor: "pointer",
-          fontSize: "18px",
-          color: "#991b1b"
-        }}
-      >
-        ✕
-      </button>
-    </div>
-    {alertas.slice(0, 5).map(a => (
-      <div key={a.id + a.tipo} style={{ 
-        display: "flex", 
-        alignItems: "center", 
-        gap: "8px", 
-        padding: "5px 0"
-      }}>
-        <span style={{
-          width: "8px",
-          height: "8px",
-          borderRadius: "50%",
-          background: a.stock === 0 ? "#ef4444" : "#f59e0b"
-        }}></span>
-        <span style={{ 
-          fontSize: "11px", 
-          padding: "2px 6px", 
-          background: a.tipo === 'producto' ? "#3b82f6" : "#8b5cf6",
-          color: "white",
-          borderRadius: "4px"
-        }}>
-          {a.tipo === 'producto' ? 'Prod' : 'Mat'}
-        </span>
-        <span style={{ flex: 1 }}>{a.nombre}</span>
-        <span style={{ color: "#666" }}>{a.stock}/{a.stock_minimo}</span>
-      </div>
-    ))}
-    {count > 5 && (
-      <button 
-        onClick={() => setShowAlertas(!showAlertas)}
-        style={{ 
-          marginTop: "8px",
-          background: "none", 
-          border: "none", 
-          cursor: "pointer",
-          color: "#3b82f6",
-          fontSize: "13px"
-        }}
-      >
-        Ver todos ({count}) →
-      </button>
-    )}
-  </div>
-)}
-
-<h1>Dashboard {count > 0 && (
-  <span 
-    onClick={() => setShowAlertas(!showAlertas)}
-    style={{ 
-      cursor: "pointer", 
-      marginLeft: "15px",
-      padding: "5px 12px",
-      background: "#ef4444",
-      color: "white",
-      borderRadius: "12px",
-      fontSize: "14px"
-    }}
-  >
-    ⚠ {count}
-  </span>
-)}
-
-{showAlertas && count > 0 && (
-  <div style={{ 
-    marginTop: "15px", 
-    padding: "15px", 
-    background: "#fef2f2", 
-    border: "1px solid #fecaca",
-    borderRadius: "8px"
-  }}>
-    <h4 style={{ margin: "0 0 10px 0", color: "#991b1b" }}>Stock bajo (materiales y productos):</h4>
-    {alertas.map(a => (
-      <div key={a.id + a.tipo} style={{ 
-        display: "flex", 
-        alignItems: "center", 
-        gap: "8px", 
-        padding: "8px 0",
-        borderBottom: "1px solid #fecaca"
-      }}>
-        <span style={{
-          width: "8px",
-          height: "8px",
-          borderRadius: "50%",
-          background: a.stock === 0 ? "#ef4444" : "#f59e0b"
-        }}></span>
-        <span style={{ 
-          fontSize: "11px", 
-          padding: "2px 6px", 
-          background: a.tipo === 'producto' ? "#3b82f6" : "#8b5cf6",
-          color: "white",
-          borderRadius: "4px"
-        }}>
-          {a.tipo === 'producto' ? 'Prod' : 'Mat'}
-        </span>
-        <span style={{ flex: 1 }}>{a.nombre}</span>
-        <span style={{ color: "#666" }}>Stock: {a.stock} / Min: {a.stock_minimo}</span>
-      </div>
-    ))}
-  </div>
-)}
-</h1>
+<h1>Dashboard</h1>
 
 <div className="dashboard-grid">
 
