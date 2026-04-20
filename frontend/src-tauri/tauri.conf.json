@@ -29,9 +29,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis", "dmg"],
-    "resources": [
-      "../../backend/certs"
-    ],
+    "resources": [],
     "externalBin": [
       "./binaries/ga-erp-backend"
     ],
