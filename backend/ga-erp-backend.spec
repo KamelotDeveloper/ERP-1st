@@ -7,7 +7,6 @@ a = Analysis(
     binaries=[],
     datas=[
         ('carpinteria.db', '.'),
-        ('certs', 'certs'),
         ('.env.example', '.'),
     ],
     hiddenimports=['fastapi', 'uvicorn', 'sqlalchemy', 'pydantic', 'pydantic_settings', 'slowapi', 'passlib', 'passlib.handlers.bcrypt', 'bcrypt', 'alembic', 'openpyxl', 'httpx', 'python_jose', 'python_multipart', 'email_validator', 'jose', 'dotenv', 'starlette', 'anyio', 'click', 'h11', 'idna', 'certifi', 'typing_extensions', 'greenlet', 'mako', 'markupsafe', 'wrapt', 'cryptography', 'ecdsa', 'rsa', 'pyasn1', 'cffi', 'pycparser', 'six', 'packaging', 'limits', 'colorama'],
