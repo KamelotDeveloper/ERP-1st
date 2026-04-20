@@ -83,7 +83,9 @@ export default function Products() {
   };
 
   const del = async (id) => {
-    if (!confirm("¿Eliminar producto?")) return;
+    if (!confirm("¿Eliminar producto?")) {
+      return;
+    }
     try {
       await api.delete("/products/" + id);
       loadData(currentPage);

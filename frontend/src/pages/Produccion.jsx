@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import api from "../services/api";
 
 export default function Produccion() {
+  console.log("=== Produccion component MOUNTED ===");
   const [activeTab, setActiveTab] = useState("ordenes");
   const [ordenes, setOrdenes] = useState([]);
   const [plantillas, setPlantillas] = useState([]);
@@ -25,27 +26,72 @@ export default function Produccion() {
   const [mensaje, setMensaje] = useState({ type: "", text: "" });
 
   useEffect(() => {
-    loadData();
+    // Load all production data on mount
+const loadAllData = async () => {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        console.log("Token exists:", !!token, token ? "YES" : "NO");
+        
+        // Products and materials don't need auth
+        const [prodsRes, matsRes] = await Promise.all([
+          api.get("/products"),
+          api.get("/materials")
+        ]);
+        
+        // Always load ordenes and plantillas (even without token, just try)
+        let ordenesRes = { data: [] };
+        let plantillasRes = { data: [] };
+        
+        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+        
+        try {
+          const [oRes, pRes] = await Promise.all([
+            api.get("/produccion/ordenes", { headers: authHeaders }).catch(e => ({ data: [] })),
+            api.get("/produccion/plantillas", { headers: authHeaders }).catch(e => ({ data: [] }))
+          ]);
+          ordenesRes = oRes;
+          plantillasRes = pRes;
+        } catch (e) {
+          console.error("Error loading ordenes/plantillas:", e);
+        }
+        
+        console.log("=== DEBUG PROD ===");
+        console.log("Products:", prodsRes.data?.length);
+        console.log("Materials:", matsRes.data?.length);
+        console.log("Ordenes:", ordenesRes.data?.length);
+        console.log("Plantillas:", plantillasRes.data?.length);
+        
+        setProducts(prodsRes.data || []);
+        setMaterials(matsRes.data || []);
+        setOrdenes(ordenesRes.data || []);
+        setPlantillas(plantillasRes.data || []);
+      } catch (err) {
+        console.error("Error loading production data:", err);
+        console.error("Error response:", err.response?.data);
+      }
+      setLoading(false);
+    };
+    
+    loadAllData();
   }, []);
 
   const loadData = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
+      console.log("Loading production data, token:", token ? "present" : "missing");
       
-      const [ordenesRes, plantillasRes, productsRes, materialsRes] = await Promise.all([
+      const [ordenesRes, plantillasRes] = await Promise.all([
         api.get("/produccion/ordenes", { headers: { Authorization: `Bearer ${token}` } }),
-        api.get("/produccion/plantillas", { headers: { Authorization: `Bearer ${token}` } }),
-        api.get("/products", { headers: { Authorization: `Bearer ${token}` } }),
-        api.get("/materials", { headers: { Authorization: `Bearer ${token}` } })
+        api.get("/produccion/plantillas", { headers: { Authorization: `Bearer ${token}` } })
       ]);
       
       setOrdenes(ordenesRes.data);
       setPlantillas(plantillasRes.data);
-      setProducts(productsRes.data);
-      setMaterials(materialsRes.data);
     } catch (err) {
       console.error("Error loading data:", err);
+      console.error("Error response:", err.response?.data);
     }
     setLoading(false);
   };
@@ -124,8 +170,13 @@ export default function Produccion() {
       return;
     }
 
-    // Filtrar materiales sin completar
-    const materialesValidos = newPlantilla.materiales.filter(m => m.material_id && m.cantidad > 0);
+    // Filtrar materiales sin completar y convertir material_id a número
+    const materialesValidos = newPlantilla.materiales
+      .filter(m => m.material_id && m.cantidad > 0)
+      .map(m => ({
+        material_id: Number(m.material_id),
+        cantidad: m.cantidad
+      }));
     if (materialesValidos.length === 0) {
       alert("Agrega materiales válidos");
       return;
@@ -172,7 +223,13 @@ export default function Produccion() {
       return;
     }
 
-    const materialesValidos = editingPlantilla.materiales.filter(m => m.material_id && m.cantidad > 0);
+    // Filtrar y convertir material_id a número
+    const materialesValidos = editingPlantilla.materiales
+      .filter(m => m.material_id && m.cantidad > 0)
+      .map(m => ({
+        material_id: Number(m.material_id),
+        cantidad: m.cantidad
+      }));
     if (materialesValidos.length === 0) {
       alert("Agrega materiales válidos");
       return;
@@ -200,7 +257,9 @@ export default function Produccion() {
 
   // Eliminar plantilla
   const deletePlantilla = async (plantillaId) => {
-    if (!confirm("¿Estás seguro de eliminar esta plantilla?")) return;
+    if (!confirm("¿Estás seguro de eliminar esta plantilla?")) {
+      return; // user clicked Cancel - do nothing
+    }
     
     try {
       const token = localStorage.getItem("token");
@@ -323,6 +382,7 @@ export default function Produccion() {
                   disabled={!!editingPlantilla}
                 >
                   <option value="">-- Seleccionar producto --</option>
+                  {products.length === 0 && <option>NO HAY PRODUCTOS DEBUG</option>}
                   {products.map(p => (
                     <option key={p.id} value={p.id}>{p.name} (SKU: {p.sku})</option>
                   ))}
@@ -345,6 +405,7 @@ export default function Produccion() {
                     style={{ flex: 2, padding: "8px" }}
                   >
                     <option value="">-- Material --</option>
+                    {materials.length === 0 && <option>NO HAY MATERIALES</option>}
                     {materials.map(mat => (
                       <option key={mat.id} value={mat.id}>{mat.name} (Stock: {mat.stock || mat.current_stock || 0})</option>
                     ))}
@@ -469,6 +530,7 @@ export default function Produccion() {
               style={{ width: "100%", padding: "8px" }}
             >
               <option value="">-- Seleccionar producto --</option>
+              {plantillas.length === 0 && <option>NO HAY PLANTILLAS</option>}
               {plantillas.filter(p => p.is_active).map(p => (
                 <option key={p.id} value={p.id}>
                   {p.product_name} ({p.materiales?.length || 0} materiales)

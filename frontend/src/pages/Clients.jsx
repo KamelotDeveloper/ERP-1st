@@ -73,7 +73,9 @@ export default function Clients() {
   };
 
   const del = async (id) => {
-    if (!confirm("¿Eliminar cliente?")) return;
+    if (!confirm("¿Eliminar cliente?")) {
+      return;
+    }
     try {
       await api.delete("/clients/" + id);
       loadData(currentPage);

@@ -113,7 +113,12 @@ export default function Budget() {
       return;
     }
 
-    const validItems = form.items.filter(i => i.material_id && i.cantidad > 0);
+    const validItems = form.items
+      .filter(i => i.material_id && i.cantidad > 0)
+      .map(i => ({
+        material_id: Number(i.material_id),  // Convertir string a int para Pydantic
+        cantidad: i.cantidad
+      }));
     if (validItems.length === 0) {
       alert("Complete los items del presupuesto");
       return;
@@ -147,7 +152,23 @@ export default function Budget() {
       resetForm();
       loadData();
     } catch (err) {
-      setMensaje({ type: "error", text: err.response?.data?.detail || "Error al guardar" });
+      // Handle 422 validation errors and other errors properly
+      let errorMessage = "Error al guardar";
+      if (err.response?.data?.detail) {
+        // Pydantic validation error - format as readable message
+        const details = err.response.data.detail;
+        if (Array.isArray(details)) {
+          // Field validation errors
+          errorMessage = details.map(d => `${d.loc?.[1] || 'campo'}: ${d.msg}`).join(', ');
+        } else if (typeof details === 'string') {
+          errorMessage = details;
+        } else {
+          errorMessage = JSON.stringify(details);
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      setMensaje({ type: "error", text: String(errorMessage) });
     }
   };
 
@@ -226,7 +247,9 @@ export default function Budget() {
   };
 
   const deletePresupuesto = async (id) => {
-    if (!confirm("¿Eliminar este presupuesto?")) return;
+    if (!confirm("¿Eliminar este presupuesto?")) {
+      return;
+    }
     try {
       const token = localStorage.getItem("token");
       await api.delete(`/presupuestos/${id}`, {
@@ -256,143 +279,36 @@ export default function Budget() {
     }
   };
 
-  const downloadPDF = async (id) => {
+const downloadPDF = async (id) => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await api.get(`/presupuestos/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await api.get(`/presupuestos/${id}/pdf`, {
+        responseType: 'blob',
+        timeout: 30000
       });
       
-      const p = res.data;
+      // Check if response is valid
+      if (!response.data) {
+        throw new Error('El servidor no devolvió datos');
+      }
       
-      // Generar HTML del PDF
-      const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Presupuesto - ${p.nombre}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #333; padding: 40px; }
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #22382c; }
-    .title-section { background: #22382c; color: white; padding: 15px 20px; margin-bottom: 20px; border-radius: 5px; }
-    .title-section h2 { font-size: 20px; }
-    .title-section .date { font-size: 11px; opacity: 0.9; margin-top: 5px; }
-    .client-section { margin-bottom: 25px; padding: 15px; background: #f8f9fa; border-radius: 5px; }
-    .client-section h3 { color: #22382c; font-size: 14px; margin-bottom: 10px; }
-    .client-section .info { display: flex; gap: 30px; flex-wrap: wrap; }
-    .client-section .label { font-weight: bold; color: #666; }
-    .table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-    .table th { background: #22382c; color: white; padding: 12px; text-align: left; font-size: 11px; }
-    .table td { padding: 10px 12px; border-bottom: 1px solid #ddd; }
-    .table tr:nth-child(even) { background: #f8f9fa; }
-    .table .right { text-align: right; }
-    .table .center { text-align: center; }
-    .totals { margin-left: auto; width: 300px; }
-    .totals-row { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #ddd; }
-    .totals-row.total { background: #22382c; color: white; font-size: 16px; font-weight: bold; border: none; border-radius: 5px; margin-top: 5px; }
-    .notes { margin-top: 25px; padding: 15px; background: #fff9e6; border-radius: 5px; border-left: 4px solid #f59e0b; }
-    .notes h4 { color: #f59e0b; margin-bottom: 8px; }
-    .footer { margin-top: 40px; text-align: center; color: #888; font-size: 10px; padding-top: 20px; border-top: 1px solid #ddd; }
-    .footer p { margin: 3px 0; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div style="display: flex; align-items: center; gap: 15px;">
-      <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #4ade80, #22382c); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; font-weight: bold;">
-        EM
-      </div>
-      <div>
-        <h1 style="color: #22382c; margin: 0;">El Menestral</h1>
-        <p style="color: #666; font-size: 11px; margin: 3px 0 0 0;">Carpintería y Muebles a Medida</p>
-      </div>
-    </div>
-    <div class="company-info" style="text-align: right;">
-      <p style="font-size: 11px; color: #666;">Tel: 11 1234-5678</p>
-      <p style="font-size: 11px; color: #666;">info@elmenestral.com</p>
-    </div>
-  </div>
-  
-  <div class="title-section">
-    <h2>PRESUPUESTO</h2>
-    <div class="date">Fecha: ${new Date(p.fecha_creacion).toLocaleDateString('es-AR')}</div>
-  </div>
-  
-  <div class="client-section">
-    <h3>CLIENTE</h3>
-    <div class="info">
-      <div><span class="label">Nombre:</span> ${p.cliente_nombre || 'No especificado'}</div>
-      <div><span class="label">Teléfono:</span> ${p.cliente_telefono || 'No especificado'}</div>
-      <div><span class="label">Email:</span> ${p.cliente_email || 'No especificado'}</div>
-    </div>
-  </div>
-  
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Item</th>
-        <th class="center">Cantidad</th>
-        <th class="right">Precio Unit.</th>
-        <th class="right">Subtotal</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${(Array.isArray(p.items) ? p.items : []).map((item, i) => `
-      <tr>
-        <td>${(item.material && item.material.name) || item.material_name || 'Material'}</td>
-        <td class="center">${item.cantidad}</td>
-        <td class="right">$${(item.precio_unitario || 0).toLocaleString('es-AR')}</td>
-        <td class="right">$${(item.subtotal || 0).toLocaleString('es-AR')}</td>
-      </tr>
-      `).join('')}
-    </tbody>
-  </table>
-  
-  <div class="totals">
-    <div class="totals-row">
-      <span>Materiales:</span>
-      <span>$${(p.costo_materiales || 0).toLocaleString('es-AR')}</span>
-    </div>
-    <div class="totals-row">
-      <span>Mano de Obra:</span>
-      <span>$${(p.costo_mano_obra || 0).toLocaleString('es-AR')}</span>
-    </div>
-    <div class="totals-row">
-      <span>Margen:</span>
-      <span>$${(p.margen || 0).toLocaleString('es-AR')}</span>
-    </div>
-    <div class="totals-row total">
-      <span>TOTAL:</span>
-      <span>$${(p.precio_final || 0).toLocaleString('es-AR')}</span>
-    </div>
-  </div>
-  
-  ${p.notas ? `
-  <div class="notes">
-    <h4>Observaciones</h4>
-    <p>${p.notas}</p>
-  </div>
-  ` : ''}
-  
-  <div class="footer">
-    <p>Gracias por confiar en El Menestral</p>
-    <p>Este presupuesto tiene validez de 30 días</p>
-  </div>
-</body>
-</html>
-      `;
+      const blob = response.data;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
       
-      // Descargar directamente usando el servicio Tauri
-      const timestamp = new Date().toISOString().slice(0, 10);
-      const filename = `Presupuesto_${p.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.html`;
+      // Nombre de archivo: ElMenestral_Presupuesto_{id}.pdf
+      link.setAttribute('download', `ElMenestral_Presupuesto_${id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
       
-      await downloadPDFToFolder(filename, html);
+      // Mostrar mensaje de éxito
+      alert('✅ PDF descargado: ElMenestral_Presupuesto_' + id + '.pdf');
       
     } catch (err) {
-      console.error("Error generating PDF:", err);
-      alert("Error al generar PDF: " + (err.response?.data?.detail || err.message));
+      console.error('Error descargando PDF:', err);
+      alert('Error al generar PDF. Verifique que el backend esté corriendo.');
     }
   };
 

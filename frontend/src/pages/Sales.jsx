@@ -68,7 +68,9 @@ export default function Sales() {
   };
 
   const del = async (id) => {
-    if (!confirm("¿Eliminar venta?")) return;
+    if (!confirm("¿Eliminar venta?")) {
+      return;
+    }
     try {
       await api.delete("/sales/" + id);
       loadData(currentPage);

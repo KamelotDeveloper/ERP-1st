@@ -68,7 +68,24 @@ export default function Materials() {
       loadData(currentPage);
     } catch (err) {
       console.error("Error saving material:", err);
-      setError("Error al guardar: " + (err.response?.data?.detail || err.message));
+      const errorData = err.response?.data?.detail;
+      let errorMessage = "Error al guardar";
+      
+      if (errorData) {
+        if (Array.isArray(errorData)) {
+          // Errores de Pydantic: lista de {loc, msg, type}
+          errorMessage = errorData.map(e => {
+            const field = e.loc ? e.loc.join(".") : "campo";
+            return `${field}: ${e.msg}`;
+          }).join("\n");
+        } else if (typeof errorData === "string") {
+          errorMessage = errorData;
+        }
+      } else if (err.message) {
+        errorMessage += " - " + err.message;
+      }
+      
+      setError(errorMessage);
     }
   };
 
@@ -85,7 +102,9 @@ export default function Materials() {
   };
 
   const del = async (id) => {
-    if (!confirm("¿Eliminar material?")) return;
+    if (!confirm("¿Eliminar material?")) {
+      return;
+    }
     try {
       await api.delete("/materials/" + id);
       loadData(currentPage);
