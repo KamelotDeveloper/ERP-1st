@@ -28,10 +28,14 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": ["nsis", "dmg"],
     "resources": [
-      "../../backend/dist/ga-erp-backend.exe",
       "../../backend/certs"
+    ],
+    "externalBin": [
+      "./binaries/ga-erp-backend-x86_64-pc-windows-msvc.exe",
+      "./binaries/ga-erp-backend-aarch64-apple-darwin",
+      "./binaries/ga-erp-backend-x86_64-apple-darwin"
     ],
     "icon": [
       "icons/32x32.png",
