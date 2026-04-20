@@ -19,7 +19,7 @@ jobs:
           - platform: 'macos-latest'
             target: 'aarch64-apple-darwin'
             binary_suffix: 'aarch64-apple-darwin'
-          - platform: 'macos-latest'
+          - platform: 'macos-13'
             target: 'x86_64-apple-darwin'
             binary_suffix: 'x86_64-apple-darwin'
 
@@ -43,35 +43,31 @@ jobs:
         working-directory: ./backend
         run: python -m PyInstaller ga-erp-backend.spec --noconfirm
 
-      - name: Rename and copy binary to binaries folder
+      - name: Copy binary to binaries folder (Windows)
+        if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          $target = "${{ matrix.binary_suffix }}"
-          $src = "backend/dist/ga-erp-backend.exe"
-          $dst = "frontend/src-tauri/binaries/$target"
-          
-          # Verificar si existe el output de PyInstaller
+          $dst = "frontend/src-tauri/binaries/ga-erp-backend-${{ matrix.binary_suffix }}"
           if (Test-Path "backend/dist/ga-erp-backend.exe") {
-            Copy-Item $src $dst -Force
-            Write-Host "Copied: $src -> $dst"
-          } elseif (Test-Path "backend/dist/ga-erp-backend") {
-            # En Mac puede ser sin extensión
-            Copy-Item "backend/dist/ga-erp-backend" $dst -Force
-            Write-Host "Copied (Mac binary): backend/dist/ga-erp-backend -> $dst"
-          } else {
-            # Verificar si es un .app (Mac GUI app)
-            $appPath = "backend/dist/ga-erp-backend.app"
-            if (Test-Path $appPath) {
-              $macBinary = "$appPath/Contents/MacOS/ga-erp-backend"
-              if (Test-Path $macBinary) {
-                Copy-Item $macBinary $dst -Force
-                Write-Host "Copied from .app: $macBinary -> $dst"
-              }
-            } else {
-              Write-Host "WARNING: No binary found at $src"
-              dir backend/dist/
-            }
+            Copy-Item "backend/dist/ga-erp-backend.exe" $dst -Force
           }
+
+      - name: Copy binary to binaries folder (macOS)
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          DST="frontend/src-tauri/binaries/ga-erp-backend-${{ matrix.binary_suffix }}"
+          if [ -f "backend/dist/ga-erp-backend" ]; then
+            cp "backend/dist/ga-erp-backend" "$DST"
+            chmod +x "$DST"
+          elif [ -f "backend/dist/ga-erp-backend.app/Contents/MacOS/ga-erp-backend" ]; then
+            cp "backend/dist/ga-erp-backend.app/Contents/MacOS/ga-erp-backend" "$DST"
+            chmod +x "$DST"
+          else
+            echo "ERROR: No se encontró el binario de PyInstaller"
+            ls -la backend/dist/
+            exit 1
+          fi
 
       # ===== TAURI FRONTEND BUILD =====
       - name: Setup Node.js LTS
@@ -83,6 +79,8 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Install frontend dependencies
         working-directory: ./frontend
