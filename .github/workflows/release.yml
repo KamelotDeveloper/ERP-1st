@@ -94,6 +94,14 @@ jobs:
         working-directory: ./frontend
         run: npm run tauri build -- --target ${{ matrix.target }}
 
+      - name: List bundle output
+        shell: bash
+        run: |
+          echo "=== Buscando bundles ==="
+          find frontend/src-tauri/target -name "*.dmg" -o -name "*.msi" -o -name "*.exe" 2>/dev/null | head -20
+          echo "=== Estructura target ==="
+          ls -la frontend/src-tauri/target/ || echo "No existe target/"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
