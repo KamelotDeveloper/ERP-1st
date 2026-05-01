@@ -129,6 +129,8 @@ from routers import presupuestos
 app.include_router(presupuestos.router)
 from routers import export
 app.include_router(export.router)
+from routers import suscripcion
+app.include_router(suscripcion.router)
 
 # Health check
 @app.get("/health")

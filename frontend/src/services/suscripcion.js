@@ -1,70 +1,79 @@
-// URL de la API de suscripción en Vercel
-const SUSCRIPCION_API_URL = "https://suscripcion-api-kc5t.vercel.app";
+import axios from "axios";
 
-// Generar ID único desde el dispositivo
-function generateClientId() {
-  // Usar nombre de usuario + fecha como ID temporal
-  const stored = localStorage.getItem("client_id");
-  if (stored) return stored;
-  
-  const newId = "user_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
-  localStorage.setItem("client_id", newId);
-  return newId;
-}
+// URL de la API de suscripciones en Vercel (restaurado después del hack)
+const suscripcionApi = axios.create({
+  baseURL: "https://suscripcion-api-kc5t.vercel.app",
+  timeout: 10000,
+});
 
-// Verificar suscripción
-export async function verificarSuscripcion() {
-  const clientId = generateClientId();
-  
-  try {
-    const res = await fetch(`${SUSCRIPCION_API_URL}/api/verificar`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: clientId })
-    });
-    
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    console.error("Error verificando suscripción:", error);
-    return { activo: true, estado: "offline", mensaje: "Sin conexión" };
+// Manejo de errores global
+suscripcionApi.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.code === 'ECONNABORTED') {
+      console.error('Timeout: El servidor no respondió en 10 segundos');
+    } else if (!error.response) {
+      console.error('Error de conexión: El backend no está disponible');
+    } else {
+      console.error('Error del servidor:', error.response.status + ' - ' + JSON.stringify(error.response.data));
+    }
+    return Promise.reject(error);
   }
+);
+
+// ==================== PLANES ====================
+
+export async function obtenerPlanes() {
+  const response = await suscripcionApi.get('/api/suscripcion/planes');
+  return response.data;
 }
 
-// Iniciar prueba gratis de 7 días
+// ==================== CREAR PREFERENCIA DE PAGO ====================
+
+export async function crearPreferencia(client_id, plan, email, codigo_descuento = null) {
+  const response = await suscripcionApi.post('/api/suscripcion/crear-preferencia', {
+    client_id,
+    plan,
+    email,
+    codigo_descuento
+  });
+  return response.data;
+}
+
+// ==================== VERIFICAR SUSCRIPCIÓN ====================
+
+export async function verificarSuscripcion(client_id) {
+  const response = await suscripcionApi.post('/api/suscripcion/verificar', {
+    client_id
+  });
+  return response.data;
+}
+
+// ==================== VALIDAR CÓDIGO DE DESCUENTO ====================
+
+export async function validarCodigo(codigo, plan = null) {
+  const response = await suscripcionApi.post('/api/suscripcion/codigo-descuento', {
+    codigo,
+    plan
+  });
+  return response.data;
+}
+
+// ==================== INICIAR PRUEBA GRATIS ====================
+
 export async function iniciarPruebaGratis(email) {
-  const clientId = generateClientId();
+  // Obtener o generar client_id
+  let clientId = localStorage.getItem("client_id");
+  if (!clientId) {
+    clientId = "user_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem("client_id", clientId);
+  }
   
-  try {
-    const res = await fetch(`${SUSCRIPCION_API_URL}/api/iniciar-prueba`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: clientId, email: email })
-    });
-    
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    console.error("Error iniciando prueba:", error);
-    return { ok: false, error: "Sin conexión" };
-  }
+  const response = await suscripcionApi.post('/api/suscripcion/iniciar-prueba', {
+    client_id: clientId,
+    email
+  });
+  return response.data;
 }
 
-// Validar código de descuento
-export async function validarCodigo(codigo) {
-  try {
-    const res = await fetch(`${SUSCRIPCION_API_URL}/api/codigo-descuento`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codigo })
-    });
-    
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    console.error("Error validando código:", error);
-    return { valido: false, error: "Sin conexión" };
-  }
-}
-
-export { generateClientId, SUSCRIPCION_API_URL };
+export default suscripcionApi;

@@ -2,14 +2,12 @@ import os
 from functools import lru_cache
 from typing import Optional
 from pydantic_settings import BaseSettings
-import pathlib
+from utils.paths import get_db_path  # ← importar la función correcta
 
 
 def get_database_url() -> str:
     """Genera la URL de la base de datos usando paths absolutos."""
-    # Usar path absoluto basado en la ubicación del archivo de configuración
-    base_dir = pathlib.Path(__file__).parent.resolve()
-    db_path = base_dir / "carpinteria.db"
+    db_path = get_db_path("carpinteria.db")  # ← usa sys.executable en frozen
     return f"sqlite:///{db_path}"
 
 
@@ -46,6 +44,16 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
     RATE_LIMIT_LOGIN_PER_MINUTE: int = 5
+    
+    # Supabase (Suscripciones Fase 1)
+    SUPABASE_URL: Optional[str] = None  # Se lee de .env
+    SUPABASE_SERVICE_KEY: Optional[str] = None  # Se lee de .env
+    
+    # MercadoPago (Suscripciones Fase 1)
+    MP_ACCESS_TOKEN: Optional[str] = None  # Se lee de .env
+    MP_SUCCESS_URL: str = "http://127.0.0.1:8000/api/suscripcion/exito"
+    MP_FAILURE_URL: str = "http://127.0.0.1:8000/api/suscripcion/fallo"
+    MP_PENDING_URL: str = "http://127.0.0.1:8000/api/suscripcion/pendiente"
     
     class Config:
         env_file = ".env"

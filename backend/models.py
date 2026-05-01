@@ -224,6 +224,31 @@ class MaterialConsumo(Base):
     material = relationship("Material")
 
 
+# ==================== MÓDULO DE SUSCRIPCIONES ====================
+
+class Suscripcion(Base):
+    __tablename__ = "suscripciones"
+    
+    client_id = Column(String, primary_key=True)
+    email = Column(String, nullable=False)
+    plan = Column(String, nullable=False, default="1_mes")  # '1_mes', '6_meses', '1_anio'
+    estado = Column(String, nullable=False, default="prueba")  # 'prueba', 'activo', 'expirado', 'cancelado'
+    fecha_inicio = Column(DateTime, default=datetime.utcnow)
+    fecha_expiracion = Column(DateTime, nullable=False)
+    mp_payment_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CodigoDescuento(Base):
+    __tablename__ = "codigos_descuento"
+    
+    codigo = Column(String, primary_key=True)
+    descuento_porcentaje = Column(Integer, nullable=False)  # 0-100
+    plan_objetivo = Column(String, nullable=True)  # '1_mes', '6_meses', '1_anio', NULL
+    fecha_expiracion = Column(DateTime, nullable=True)
+    usos_maximos = Column(Integer, default=1)
+    usos_actuales = Column(Integer, default=0)
+
+
 # ==================== MÓDULO DE PRESUPUESTOS ====================
 
 class Presupuesto(Base):
