@@ -3,6 +3,7 @@
 use std::env;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -144,6 +145,10 @@ fn main() {
         }
     }
 
+    // Create shared handle to track the backend process for cleanup on exit
+    let backend_child: Arc<Mutex<Option<std::process::Child>>> = Arc::new(Mutex::new(None));
+    let backend_child_spawn = backend_child.clone();
+
     // Start backend (prefer exe, fallback to Python)
     if let Some(bp) = backend_path {
         // Try to use the PyInstaller executable first
@@ -155,15 +160,20 @@ fn main() {
                 use std::os::windows::process::CommandExt;
                 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-                let _result = Command::new(&be)
+                if let Ok(child) = Command::new(&be)
                     .creation_flags(CREATE_NO_WINDOW)
                     .current_dir(&bp)
-                    .spawn();
+                    .spawn()
+                {
+                    *backend_child_spawn.lock().unwrap() = Some(child);
+                }
             }
 
             #[cfg(not(target_os = "windows"))]
             {
-                let _result = Command::new(&be).current_dir(&bp).spawn();
+                if let Ok(child) = Command::new(&be).current_dir(&bp).spawn() {
+                    *backend_child_spawn.lock().unwrap() = Some(child);
+                }
             }
 
             println!("Backend executable started");
@@ -212,7 +222,7 @@ fn main() {
                 use std::os::windows::process::CommandExt;
                 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-                let _result = Command::new(&python)
+                if let Ok(child) = Command::new(&python)
                     .arg("-m")
                     .arg("uvicorn")
                     .arg("main:app")
@@ -222,12 +232,15 @@ fn main() {
                     .arg("8000")
                     .creation_flags(CREATE_NO_WINDOW)
                     .current_dir(&bp)
-                    .spawn();
+                    .spawn()
+                {
+                    *backend_child_spawn.lock().unwrap() = Some(child);
+                }
             }
 
             #[cfg(not(target_os = "windows"))]
             {
-                let _result = Command::new(&python)
+                if let Ok(child) = Command::new(&python)
                     .arg("-m")
                     .arg("uvicorn")
                     .arg("main:app")
@@ -236,7 +249,10 @@ fn main() {
                     .arg("--port")
                     .arg("8000")
                     .current_dir(&bp)
-                    .spawn();
+                    .spawn()
+                {
+                    *backend_child_spawn.lock().unwrap() = Some(child);
+                }
             }
 
             println!("Backend Python started");
@@ -279,6 +295,9 @@ fn main() {
         std::fs::write(&path, content).map_err(|e| format!("Failed to write file: {}", e))
     }
 
+    // Clone for use in the Tauri window event handler
+    let backend_child_cleanup = backend_child.clone();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
@@ -288,6 +307,20 @@ fn main() {
             create_download_folder,
             save_file
         ])
+        .on_window_event(move |_window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                if let Some(mut child) = backend_child_cleanup.lock().unwrap().take() {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    // Final cleanup after Tauri exits (in case on_window_event didn't fire)
+    if let Some(mut child) = backend_child.lock().unwrap().take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    };
 }

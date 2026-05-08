@@ -13,7 +13,7 @@ import Profile from "./pages/Profile";
 import Produccion from "./pages/Produccion";
 import Budget from "./pages/Budget";
 import PlanSelection from "./pages/PlanSelection";
-import { verificarSuscripcion } from "./services/suscripcion";
+import { iniciarSesion, verificarActivacion } from "./services/suscripcion";
 
 export default function App() {
   const [tieneAcceso, setTieneAcceso] = useState(false);
@@ -31,16 +31,23 @@ export default function App() {
         }
         setClientId(cid);
 
-        // Verificar suscripción en el backend local (:8000)
-        const resultado = await verificarSuscripcion(cid);
+        // Verificar licencia usando el nuevo endpoint local
+        const resultado = await iniciarSesion(cid);
         
-        if (resultado.activo) {
+        if (resultado.ok) {
           setTieneAcceso(true);
+          // Guardar información de la licencia si es necesario
+          if (resultado.tipo === "licencia") {
+            console.log("Licencia activa:", resultado.plan, "- días restantes:", resultado.dias_restantes);
+          } else if (resultado.tipo === "trial") {
+            console.log("Trial activo - días restantes:", resultado.dias_restantes);
+          }
         } else {
           setTieneAcceso(false);
+          console.log("Sin acceso:", resultado.error || "No especificado");
         }
       } catch (error) {
-        console.error("Error verificando suscripción:", error);
+        console.error("Error verificando licencia:", error);
         // Si hay error de conexión, asumir que no tiene acceso
         setTieneAcceso(false);
       } finally {
@@ -53,7 +60,6 @@ export default function App() {
 
   const handleActivar = (fechaExpiracion) => {
     setTieneAcceso(true);
-    // Podés guardar la fecha de expiración si querés
     console.log("Acceso activado hasta:", fechaExpiracion);
   };
 
@@ -66,14 +72,14 @@ export default function App() {
         alignItems: "center",
         justifyContent: "center"
       }}>
-        <p style={{ color: "white", fontSize: "1.5rem" }}>Verificando suscripción...</p>
+        <p style={{ color: "white", fontSize: "1.5rem" }}>Verificando licencia...</p>
       </div>
     );
   }
 
   // Si NO tiene acceso, mostrar PlanSelection
   if (!tieneAcceso) {
-    return <PlanSelection onActivar={handleActivar} />;
+    return <PlanSelection onActivar={handleActivar} clientId={clientId} />;
   }
 
   // Si SÍ tiene acceso, mostrar la app normal

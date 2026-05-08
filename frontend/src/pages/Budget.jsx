@@ -281,9 +281,11 @@ export default function Budget() {
 
 const downloadPDF = async (id) => {
     try {
+      const token = localStorage.getItem("token");
       const response = await api.get(`/presupuestos/${id}/pdf`, {
         responseType: 'blob',
-        timeout: 30000
+        timeout: 30000,
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       // Check if response is valid

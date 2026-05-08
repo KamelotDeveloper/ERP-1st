@@ -297,3 +297,16 @@ class PresupuestoItem(Base):
 
     presupuesto = relationship("Presupuesto", back_populates="items")
     material = relationship("Material")
+# ==================== LICENCIAS (Fase 1) ====================
+
+class LicenseTrial(Base):
+    """Trial local de 30 días para usuarios nuevos"""
+    __tablename__ = "license_trials"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(String, nullable=False, index=True)  # UUID from localStorage
+    fecha_inicio = Column(DateTime, default=datetime.utcnow)
+    activo = Column(Boolean, default=True)
+    
+    def __repr__(self):
+        return f"<LicenseTrial(client_id={self.client_id}, activo={self.activo})>"

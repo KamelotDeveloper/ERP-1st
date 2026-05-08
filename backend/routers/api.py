@@ -1,10 +1,12 @@
-import logging
+﻿import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from database import SessionLocal
 import models, schemas
+import requests
+from config import settings
 from typing import Optional
 from datetime import datetime
 
@@ -156,9 +158,9 @@ def get_alertas_productos(db: Session = Depends(get_db)):
     return [
         {
             "id": p.id,
-            "nombre": p.name,
-            "stock": p.stock,
-            "stock_minimo": p.stock_minimo,
+                "name": p.name,
+                "current_stock": p.stock,
+                "stock_minimo": p.stock_minimo,
             "tipo": "producto"
         }
         for p in productos
@@ -309,24 +311,36 @@ def count_materials(db: Session = Depends(get_db)):
 @router.get("/materials/alertas")
 def get_alertas_materiales(db: Session = Depends(get_db)):
     """Get materials with low stock"""
-    materiales = db.query(models.Material).filter(
-        models.Material.current_stock <= models.Material.stock_minimo,
-        models.Material.stock_minimo > 0
-    ).order_by(
-        (models.Material.stock_minimo - models.Material.current_stock).desc()
-    ).all()
-    
-    return [
-        {
-            "id": m.id,
-            "nombre": m.name,
-            "categoria": m.category,
-            "stock": m.current_stock,
-            "stock_minimo": m.stock_minimo,
-            "tipo": "material"
-        }
-        for m in materiales
-    ]
+    materials = db.query(models.Material).all()
+
+    alertas = []
+    for m in materials:
+        total_in = db.query(func.sum(models.MaterialMovement.quantity)).filter(
+            models.MaterialMovement.material_id == m.id,
+            models.MaterialMovement.type == "IN"
+        ).scalar() or 0
+
+        total_out = db.query(func.sum(models.MaterialMovement.quantity)).filter(
+            models.MaterialMovement.material_id == m.id,
+            models.MaterialMovement.type == "OUT"
+        ).scalar() or 0
+
+        stock_actual = total_in - total_out
+
+        if stock_actual <= m.stock_minimo and m.stock_minimo > 0:
+            alertas.append({
+                "id": m.id,
+                "name": m.name,
+                "categoria": m.category,
+                "current_stock": stock_actual,
+                "stock_minimo": m.stock_minimo,
+                "tipo": "material"
+            })
+
+    # Sort by urgency (how close to minimum stock)
+    alertas.sort(key=lambda x: (x["stock_minimo"] - x["current_stock"]), reverse=True)
+
+    return alertas
 
 
 @router.put("/materials/{id}")
@@ -652,3 +666,183 @@ def global_search(q: str, db: Session = Depends(get_db)):
         })
 
     return result
+# -------------------------
+# LICENCIAS (Fase 1 - Supabase)
+# -------------------------
+
+@router.post("/iniciar-sesion")
+def iniciar_sesion(data: dict, db: Session = Depends(get_db)):
+    """
+    Verifica licencia en Supabase y maneja trial local.
+    Body: { "client_id": "uuid-from-localStorage" }
+    """
+    try:
+        client_id = data.get("client_id")
+        
+        if not client_id:
+            raise HTTPException(status_code=400, detail="client_id requerido")
+        
+        # 1. Consultar Supabase licencias table (con manejo de errores)
+        license_data = None
+        try:
+            supabase_url = f"{settings.SUPABASE_URL}/rest/v1/licencias"
+            headers = {
+                "apikey": settings.SUPABASE_ANON_KEY,
+                "Authorization": f"Bearer {settings.SUPABASE_ANON_KEY}"
+            }
+            
+            # Buscar licencia activa para este client_id
+            params = {
+                "client_id": f"eq.{client_id}",
+                "estado": "eq.activa",
+                "order": "fecha_inicio.desc",
+                "limit": "1"
+            }
+            
+            response = requests.get(supabase_url, headers=headers, params=params, timeout=5)
+            
+            if response.status_code == 200:
+                licenses = response.json()
+                if licenses:
+                    license_data = licenses[0]
+        except requests.RequestException as e:
+            # Si Supabase falla, seguimos con license_data = None
+            logger.warning(f"Supabase no disponible: {e}. Continuando con trial local.")
+            license_data = None
+        
+        # 2. Si no hay licencia en Supabase, verificar trial local
+        if not license_data:
+            # Buscar trial local en SQLite
+            trial = db.query(models.LicenseTrial).filter(
+                models.LicenseTrial.client_id == client_id,
+                models.LicenseTrial.activo == True
+            ).first()
+            
+            if trial:
+                # Verificar si el trial sigue vigente
+                from datetime import datetime, timedelta
+                now = datetime.now()
+                trial_end = trial.fecha_inicio + timedelta(days=15)
+                
+                if now < trial_end:
+                    days_left = (trial_end - now).days
+                    return {
+                        "ok": True,
+                        "tipo": "trial",
+                        "dias_restantes": days_left,
+                        "fecha_fin": trial_end.isoformat()
+                    }
+                else:
+                    # Trial vencido
+                    trial.activo = False
+                    db.commit()
+                    return {
+                        "ok": False,
+                        "error": "trial_expirado",
+                        "mensaje": "El periodo de prueba ha finalizado"
+                    }
+            else:
+                # No hay trial, crear uno nuevo
+                from datetime import datetime, timedelta
+                new_trial = models.LicenseTrial(
+                    client_id=client_id,
+                    fecha_inicio=datetime.now(),
+                    activo=True
+                )
+                db.add(new_trial)
+                db.commit()
+                return {
+                    "ok": True,
+                    "tipo": "trial",
+                    "dias_restantes": 15,
+                    "fecha_fin": (datetime.now() + timedelta(days=15)).isoformat()
+                }
+        
+        # 3. Licencia de Supabase encontrada
+        from datetime import datetime
+        now = datetime.now()
+        fecha_fin = datetime.fromisoformat(license_data["fecha_fin"].replace("Z", ""))
+        
+        if now < fecha_fin:
+            dias_restantes = (fecha_fin - now).days
+            return {
+                "ok": True,
+                "tipo": "licencia",
+                "plan": license_data["plan_tipo"],
+                "dias_restantes": dias_restantes,
+                "fecha_fin": license_data["fecha_fin"],
+                "mp_payment_id": license_data.get("mp_payment_id")
+            }
+        else:
+            return {
+                "ok": False,
+                "error": "licencia_expirada",
+                "mensaje": "La licencia ha expirado"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error en iniciar_sesion: {e}")
+        raise HTTPException(status_code=500, detail="Error interno")
+
+
+@router.get("/verificar-activacion")
+def verificar_activacion(client_id: str = None, db: Session = Depends(get_db)):
+    """
+    Endpoint para que el frontend verifique el estado de activaciÃ³n.
+    Query param: client_id
+    """
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id requerido")
+    
+    # Esta funciÃ³n es similar a iniciar_sesion pero mÃ¡s ligera
+    # Solo verifica si estÃ¡ activo o no
+    try:
+        supabase_url = f"{settings.SUPABASE_URL}/rest/v1/licencias"
+        headers = {
+            "apikey": settings.SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {settings.SUPABASE_ANON_KEY}"
+        }
+        
+        params = {
+            "client_id": f"eq.{client_id}",
+            "estado": "eq.activa",
+            "select": "id,plan_tipo,fecha_inicio,fecha_fin,estado"
+        }
+        
+        response = requests.get(supabase_url, headers=headers, params=params, timeout=3)
+        
+        if response.status_code == 200 and response.json():
+            licencia = response.json()[0]
+            from datetime import datetime
+            now = datetime.now()
+            fecha_fin = datetime.fromisoformat(licencia["fecha_fin"].replace("Z", ""))
+            
+            return {
+                "activo": now < fecha_fin,
+                "tipo": "licencia",
+                "plan": licencia["plan_tipo"],
+                "fecha_fin": licencia["fecha_fin"]
+            }
+        else:
+            # Verificar trial local
+            trial = db.query(models.LicenseTrial).filter(
+                models.LicenseTrial.client_id == client_id,
+                models.LicenseTrial.activo == True
+            ).first()
+            
+            if trial:
+                from datetime import datetime, timedelta
+                now = datetime.now()
+                trial_end = trial.fecha_inicio + timedelta(days=15)
+                return {
+                    "activo": now < trial_end,
+                    "tipo": "trial",
+                    "fecha_fin": trial_end.isoformat()
+                }
+            
+            return {"activo": False, "tipo": "ninguno"}
+            
+    except Exception as e:
+        logger.error(f"Error en verificar_activacion: {e}")
+        return {"activo": False, "error": str(e)}
+

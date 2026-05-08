@@ -1,8 +1,18 @@
 import axios from "axios";
 
-// URL de la API de suscripciones en Vercel (restaurado después del hack)
+// URL del backend local (FastAPI en puerto 8000)
+// En desarrollo: localhost:8000, en Tauri: http://127.0.0.1:8000
+const getBaseURL = () => {
+  // Si estamos en Tauri, usar la IP explícita
+  if (window.__TAURI__) {
+    return "http://127.0.0.1:8000";
+  }
+  // En navegador, usar la misma origin o localhost
+  return "http://127.0.0.1:8000";
+};
+
 const suscripcionApi = axios.create({
-  baseURL: "https://suscripcion-api-kc5t.vercel.app",
+  baseURL: getBaseURL(),
   timeout: 10000,
 });
 
@@ -21,59 +31,91 @@ suscripcionApi.interceptors.response.use(
   }
 );
 
-// ==================== PLANES ====================
+// ==================== PLANES (Links fijos de MercadoPago) ====================
 
-export async function obtenerPlanes() {
-  const response = await suscripcionApi.get('/api/suscripcion/planes');
-  return response.data;
+export const PLANES = {
+  mensual: {
+    nombre: "Mensual",
+    precio: 35000,
+    periodo: "mes",
+    mp_link: "https://mpago.la/1bumKHN",
+    descripcion: "Ideal para probar el sistema"
+  },
+  semestral: {
+    nombre: "Semestral",
+    precio: 180000,
+    periodo: "6 meses",
+    mp_link: "https://mpago.la/247hTmc",
+    descripcion: "Ahorro del 14% vs mensual"
+  },
+  anual: {
+    nombre: "Anual",
+    precio: 360000,
+    periodo: "año",
+    mp_link: "https://mpago.la/1VAdrEZ",
+    descripcion: "El mejor valor, ahorro del 14% vs semestral"
+  }
+};
+
+export function obtenerPlanes() {
+  // Retorna los planes con links fijos (no necesita API call)
+  return Promise.resolve({ ok: true, planes: PLANES });
 }
 
-// ==================== CREAR PREFERENCIA DE PAGO ====================
-
-export async function crearPreferencia(client_id, plan, email, codigo_descuento = null) {
-  const response = await suscripcionApi.post('/api/suscripcion/crear-preferencia', {
-    client_id,
-    plan,
-    email,
-    codigo_descuento
-  });
-  return response.data;
-}
-
-// ==================== VERIFICAR SUSCRIPCIÓN ====================
+// ==================== VERIFICAR LICENCIA ====================
 
 export async function verificarSuscripcion(client_id) {
-  const response = await suscripcionApi.post('/api/suscripcion/verificar', {
+  // Usa el nuevo endpoint local /iniciar-sesion
+  const response = await suscripcionApi.post('/iniciar-sesion', {
     client_id
   });
   return response.data;
 }
 
-// ==================== VALIDAR CÓDIGO DE DESCUENTO ====================
+// ==================== INICIAR SESIÓN (NUEVO ENDPOINT) ====================
 
-export async function validarCodigo(codigo, plan = null) {
-  const response = await suscripcionApi.post('/api/suscripcion/codigo-descuento', {
-    codigo,
-    plan
+export async function iniciarSesion(client_id) {
+  const response = await suscripcionApi.post('/iniciar-sesion', {
+    client_id
   });
   return response.data;
 }
 
-// ==================== INICIAR PRUEBA GRATIS ====================
+// ==================== VERIFICAR ACTIVACIÓN ====================
+
+export async function verificarActivacion(client_id) {
+  const response = await suscripcionApi.get('/verificar-activacion', {
+    params: { client_id }
+  });
+  return response.data;
+}
+
+// ==================== YA NO USAMOS ESTOS (comentados para referencia) ====================
+/*
+export async function crearPreferencia(client_id, plan, email, codigo_descuento = null) {
+  // YA NO SE USA - usamos links fijos de MP
+  throw new Error("Función obsoleta - usar links fijos de MP");
+}
+
+export async function validarCodigo(codigo, plan = null) {
+  // YA NO SE USA
+  throw new Error("Función obsoleta");
+}
 
 export async function iniciarPruebaGratis(email) {
-  // Obtener o generar client_id
+  // El trial ahora se maneja en el endpoint /iniciar-sesion del backend local
   let clientId = localStorage.getItem("client_id");
   if (!clientId) {
     clientId = "user_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
     localStorage.setItem("client_id", clientId);
   }
   
-  const response = await suscripcionApi.post('/api/suscripcion/iniciar-prueba', {
-    client_id: clientId,
-    email
+  // Llamar al backend local para iniciar trial
+  const response = await suscripcionApi.post('/iniciar-sesion', {
+    client_id: clientId
   });
   return response.data;
 }
+*/
 
 export default suscripcionApi;

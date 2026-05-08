@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from logging.handlers import RotatingFileHandler
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -55,7 +56,9 @@ app.add_middleware(
     allow_origins=[
         "http://tauri.localhost",
         "http://localhost:5173",
+        "http://127.0.0.1:5173",
         "http://localhost:3000",
+        "http://127.0.0.1:3000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -155,6 +158,12 @@ if __name__ == "__main__":
     import uvicorn
     from utils.paths import is_frozen
     
+    # Fix PyInstaller: stdout/stderr son None cuando console=False
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, 'w')
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, 'w')
+    
     # Determinar host y puerto
     host = "127.0.0.1"
     port = 8000
@@ -166,7 +175,8 @@ if __name__ == "__main__":
         app=app,
         host=host,
         port=port,
-        log_level="info"
+        log_level="info",
+        log_config=None  # Usar nuestro logging, no el de uvicorn
     )
     server = uvicorn.Server(config)
     server.run()

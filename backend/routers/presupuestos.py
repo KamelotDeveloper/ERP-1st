@@ -11,6 +11,10 @@ import urllib.parse
 from typing import List, Optional
 from datetime import datetime
 
+from xhtml2pdf import pisa
+from fastapi.responses import StreamingResponse
+from io import BytesIO
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -669,3 +673,134 @@ def generar_email(
         "html": html,
         "plain_text": f"Presupuesto: {presupuesto.nombre}\n\nTotal: ${presupuesto.precio_final:,.0f}"
     }
+
+
+# ==================== GENERAR PDF ====================
+
+@router.get("/{presupuesto_id}/pdf")
+def generar_pdf_presupuesto(presupuesto_id: int, db: Session = Depends(get_db)):
+    """Generar PDF del presupuesto"""
+    presupuesto = db.query(models.Presupuesto).filter(
+        models.Presupuesto.id == presupuesto_id
+    ).first()
+    
+    if not presupuesto:
+        raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+    
+    # HTML simple compatible con xhtml2pdf (usar tablas, no flex/grid)
+    html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Presupuesto {presupuesto.id}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        .header {{ background-color: #2e86de; color: white; padding: 20px; text-align: center; }}
+        .content {{ padding: 20px; }}
+        table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+        th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }}
+        th {{ background-color: #f5f5f5; font-weight: bold; }}
+        .total-row {{ background-color: #f5f5f5; font-weight: bold; }}
+        .final-total {{ background-color: #22c55e; color: white; font-weight: bold; font-size: 18px; }}
+        .info-section {{ margin-bottom: 20px; }}
+        .info-section p {{ margin: 5px 0; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>El Menestral - Presupuesto</h2>
+    </div>
+    
+    <div class="content">
+        <div class="info-section">
+            <h3>Presupuesto: {presupuesto.nombre}</h3>
+            <p><strong>Cliente:</strong> {presupuesto.cliente_nombre or 'Sin nombre'}</p>
+            <p><strong>Fecha:</strong> {presupuesto.fecha_creacion.strftime('%d/%m/%Y') if presupuesto.fecha_creacion else 'N/A'}</p>
+            <p><strong>Estado:</strong> {presupuesto.estado}</p>
+        </div>
+        
+        <h4>Detalle de Materiales</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Material</th>
+                    <th>Cantidad</th>
+                    <th>Precio Unit.</th>
+                    <th>Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+"""
+    
+    # Agregar items a la tabla
+    for item in presupuesto.items:
+        material_nombre = item.material.name if item.material else 'Material'
+        html += f"""
+                <tr>
+                    <td>{material_nombre}</td>
+                    <td>{item.cantidad}</td>
+                    <td>${item.precio_unitario:,.0f}</td>
+                    <td>${item.subtotal:,.0f}</td>
+                </tr>
+"""
+    
+    html += f"""
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="3"><strong>Subtotal Materiales</strong></td>
+                    <td><strong>${presupuesto.costo_materiales:,.0f}</strong></td>
+                </tr>
+                <tr>
+                    <td colspan="3"><strong>Mano de Obra</strong></td>
+                    <td>${presupuesto.costo_mano_obra:,.0f}</td>
+                </tr>
+                <tr>
+                    <td colspan="3"><strong>Margen</strong></td>
+                    <td>${presupuesto.margen:,.0f}</td>
+                </tr>
+                <tr class="final-total">
+                    <td colspan="3"><strong>TOTAL</strong></td>
+                    <td><strong>${presupuesto.precio_final:,.0f}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+"""
+    
+    if presupuesto.notas:
+        html += f"""
+        <div style="margin-top: 20px;">
+            <h4>Notas:</h4>
+            <p>{presupuesto.notas}</p>
+        </div>
+"""
+    
+    html += """
+        <div style="margin-top: 30px; color: #666; text-align: center;">
+            <p>Gracias por confiar en <strong>El Menestral</strong></p>
+            <p>Carpintería y más...</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+    
+    # Convertir HTML a PDF
+    result = BytesIO()
+    pdf_status = pisa.CreatePDF(BytesIO(html.encode('UTF-8')), dest=result)
+    
+    if pdf_status.err:
+        logger.error(f"Error generando PDF para presupuesto {presupuesto_id}")
+        raise HTTPException(status_code=500, detail="Error generando PDF")
+    
+    result.seek(0)
+    
+    # Devolver como StreamingResponse
+    return StreamingResponse(
+        result,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=presupuesto_{presupuesto_id}.pdf"
+        }
+    )

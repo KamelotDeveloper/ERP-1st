@@ -1,15 +1,13 @@
-import os
+﻿import os
 from functools import lru_cache
 from typing import Optional
 from pydantic_settings import BaseSettings
-from utils.paths import get_db_path  # ← importar la función correcta
-
+from utils.paths import get_db_path
 
 def get_database_url() -> str:
     """Genera la URL de la base de datos usando paths absolutos."""
-    db_path = get_db_path("carpinteria.db")  # ← usa sys.executable en frozen
+    db_path = get_db_path("carpinteria.db")
     return f"sqlite:///{db_path}"
-
 
 class Settings(BaseSettings):
     # Database - SQLite default for desktop ERP
@@ -45,9 +43,11 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 60
     RATE_LIMIT_LOGIN_PER_MINUTE: int = 5
     
-    # Supabase (Suscripciones Fase 1)
-    SUPABASE_URL: Optional[str] = None  # Se lee de .env
-    SUPABASE_SERVICE_KEY: Optional[str] = None  # Se lee de .env
+    # Supabase (Licencias Fase 1)
+    # Estos valores se leen del .env (pydantic-settings los carga automáticamente)
+    SUPABASE_URL: str = "https://mucitlqroneaegmwvdup.supabase.co"
+    SUPABASE_ANON_KEY: Optional[str] = None
+    SUPABASE_SERVICE_KEY: Optional[str] = None  # ← CAMPO QUE FALTABA
     
     # MercadoPago (Suscripciones Fase 1)
     MP_ACCESS_TOKEN: Optional[str] = None  # Se lee de .env
@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
     
     @property
     def allowed_origins_list(self) -> list:
@@ -71,10 +72,8 @@ class Settings(BaseSettings):
     def is_afip_real_mode(self) -> bool:
         return self.AFIP_MODE.lower() == "real" and self.AFIP_CERT_PATH and self.AFIP_KEY_PATH
 
-
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
-
 
 settings = get_settings()
