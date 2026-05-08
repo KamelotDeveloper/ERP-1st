@@ -21,7 +21,8 @@ yarn-error.log
 
 # Rust/Tauri
 target/
-Cargo.lock
+# NOTA: Cargo.lock se commitea para apps (build reproducible en CI)
+# Cargo.lock
 
 # IDE
 .vscode/
