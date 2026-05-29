@@ -110,7 +110,11 @@ class WSAAClient:
             tra_path = tra_file.name
         
         out_path = tra_path + '.cms'
-        openssl = r"C:\Program Files\Git\mingw64\bin\openssl.exe"
+        # Find openssl: check PATH first, fall back to Git for Windows path
+        openssl = "openssl"
+        git_openssl = r"C:\Program Files\Git\mingw64\bin\openssl.exe"
+        if os.path.exists(git_openssl):
+            openssl = git_openssl
         
         try:
             cmd = [

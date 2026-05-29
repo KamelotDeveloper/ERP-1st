@@ -1,13 +1,13 @@
 import os
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from database import SessionLocal
 import models, schemas
-from services.wsfe_client import create_wsfe_client, create_wsaa_client
-from services.afip_service import create_afip_service
+from services.wsfe_client import create_wsfe_client
+from services.comprobante_fiscal import get_client_tipo_doc, generate_mock_cae
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -36,19 +36,6 @@ def get_next_invoice_number(db: Session, punto_venta: int, tipo_factura: int):
     if last:
         return last.numero + 1
     return 1
-
-
-def get_client_tipo_doc(cliente_cuit: str) -> tuple:
-    """Determina el tipo de documento según el CUIT del cliente"""
-    if not cliente_cuit or cliente_cuit == "0":
-        return 99, "0"
-    
-    if len(cliente_cuit) == 11 and cliente_cuit.isdigit():
-        prefix = cliente_cuit[:2]
-        if prefix in ["20", "23", "24", "27", "30", "33"]:
-            return 80, cliente_cuit
-    
-    return 96, cliente_cuit
 
 
 def is_mock_mode() -> bool:
@@ -94,55 +81,6 @@ def request_cae_real(db: Session, invoice_data: dict) -> dict:
     }
     
     return wsfe_client.request_cae(wsfe_invoice_data)
-
-
-def generate_mock_cae(invoice_data: dict, force_result: str = None) -> dict:
-    """Generate mock CAE with realistic behavior"""
-    import random
-    
-    # Check force_result parameter or simulate occasional failures
-    simulate_failure = random.random() < 0.1
-    
-    if force_result == "success" or (not simulate_failure and force_result != "failure"):
-        prefix = random.choice([61, 62, 63])
-        cae_number = f"{prefix}{random.randint(1000000000, 9999999999)}"
-        vencimiento = datetime.now() + timedelta(days=10)
-        
-        logger.info(f"Mock CAE generated successfully: {cae_number}")
-        
-        return {
-            "success": True,
-            "CAE": cae_number,
-            "CAE_vto": vencimiento.isoformat(),
-            "modo": "mock",
-            "resultado": "A",
-            "message": "CAE generado en modo simulación (sin certificado ARCA)",
-            "observaciones": [],
-            "numero_comprobante": invoice_data.get("numero", 1)
-        }
-    else:
-        error_codes = [
-            ("10001", "Error de autenticación - Token expirado"),
-            ("10002", "Error de validación - Falta dato obligatorio"),
-            ("10003", "Error de certificación - Certificado vencido"),
-            ("10004", "Error de conexión - Servicio no disponible"),
-            ("10005", "Error de validación - CUIT del emisor inválido"),
-        ]
-        
-        error_code, error_msg = random.choice(error_codes)
-        
-        logger.warning(f"Mock CAE failed with code {error_code}: {error_msg}")
-        
-        return {
-            "success": False,
-            "CAE": None,
-            "CAE_vto": None,
-            "modo": "mock",
-            "resultado": "R",
-            "message": error_msg,
-            "error_code": error_code,
-            "observaciones": [error_msg]
-        }
 
 
 @router.post("/invoices")
@@ -198,7 +136,15 @@ def create_invoice(data: schemas.InvoiceCreate, request: Request, db: Session = 
         
         if cae_result.get("success"):
             cae = cae_result["CAE"]
-            cae_vto = datetime.strptime(cae_result["CAE_vto"], "%Y-%m-%dT%H:%M:%S.%f")
+            # WSFE real devuelve YYYYMMDD, mock devuelve ISO
+            raw_vto = cae_result.get("CAE_vto", "")
+            try:
+                if len(raw_vto) == 8 and raw_vto.isdigit():
+                    cae_vto = datetime.strptime(raw_vto, "%Y%m%d")
+                else:
+                    cae_vto = datetime.fromisoformat(raw_vto)
+            except (ValueError, TypeError):
+                cae_vto = None
             estado = "issued"
             logger.info(f"CAE obtenido exitosamente: {cae}")
         else:
@@ -226,7 +172,7 @@ def create_invoice(data: schemas.InvoiceCreate, request: Request, db: Session = 
         iva=iva,
         total=total,
         estado=estado,
-        afip_response=json.dumps(cae_result) if not use_mock else json.dumps(cae_result)
+        afip_response=json.dumps(cae_result)
     )
     
     db.add(invoice)

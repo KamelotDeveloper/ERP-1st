@@ -240,6 +240,7 @@ def create_material(
         name=data.name,
         category=data.category,
         unit_cost=data.unit_cost,
+        current_stock=data.current_stock or 0,
         stock_minimo=data.stock_minimo or 0
     )
 
@@ -285,7 +286,7 @@ def list_materials(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)
             models.MaterialMovement.type == "OUT"
         ).scalar() or 0
 
-        stock = total_in - total_out
+        stock = (m.current_stock or 0) + total_in - total_out
         total_value = stock * (m.unit_cost or 0)
 
         result.append({
@@ -594,11 +595,39 @@ def dashboard(db: Session = Depends(get_db)):
     materials = db.query(func.count(models.Material.id)).scalar()
     sales = db.query(func.sum(models.Sale.total)).scalar() or 0
 
+    # Monthly sales for chart: last 12 months
+    monthly_sales = db.query(
+        func.strftime("%Y-%m", models.Sale.date).label("month"),
+        func.sum(models.Sale.total).label("total")
+    ).filter(
+        models.Sale.date >= func.date("now", "-12 months")
+    ).group_by(
+        func.strftime("%Y-%m", models.Sale.date)
+    ).order_by(
+        func.strftime("%Y-%m", models.Sale.date)
+    ).all()
+
+    # Top 10 products by quantity sold
+    top_products = db.query(
+        models.Product.name.label("product"),
+        func.sum(models.SaleItem.quantity).label("qty")
+    ).join(
+        models.SaleItem, models.Product.id == models.SaleItem.product_id
+    ).join(
+        models.Sale, models.Sale.id == models.SaleItem.sale_id
+    ).group_by(
+        models.Product.id
+    ).order_by(
+        func.sum(models.SaleItem.quantity).desc()
+    ).limit(10).all()
+
     return {
         "clients": clients,
         "products": products,
         "materials": materials,
-        "sales": sales
+        "sales": sales,
+        "monthly_sales": [{"month": m.month, "total": float(m.total)} for m in monthly_sales],
+        "top_products": [{"product": p.product, "qty": int(p.qty)} for p in top_products]
     }
 
 

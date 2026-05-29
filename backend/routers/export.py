@@ -19,7 +19,7 @@ def export_clients(db: Session = Depends(get_db)):
     ws.title = "Clientes"
     
     # Headers
-    headers = ["ID", "Nombre", "Email", "Teléfono", "Dirección", "CUIT", "Condición IVA"]
+    headers = ["ID", "Nombre", "Email", "Teléfono", "Dirección", "CUIT"]
     header_fill = PatternFill(start_color="22382c", end_color="22382c", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF")
     
@@ -36,8 +36,7 @@ def export_clients(db: Session = Depends(get_db)):
         ws.cell(row=row, column=3, value=client.email or "")
         ws.cell(row=row, column=4, value=client.phone or "")
         ws.cell(row=row, column=5, value=client.address or "")
-        ws.cell(row=row, column=6, value=client.cuit or "")
-        ws.cell(row=row, column=7, value=client.iva_condition or "")
+        ws.cell(row=row, column=6, value=getattr(client, 'tax_id', '') or "")
     
     # Auto-fit columns
     for col in ws.columns:
@@ -70,7 +69,7 @@ def export_products(db: Session = Depends(get_db)):
     ws.title = "Productos"
     
     # Headers
-    headers = ["ID", "Nombre", "Descripción", "Precio", "Costo", "Categoría"]
+    headers = ["ID", "SKU", "Nombre", "Precio", "Stock", "Stock Mínimo"]
     header_fill = PatternFill(start_color="22382c", end_color="22382c", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF")
     
@@ -83,11 +82,11 @@ def export_products(db: Session = Depends(get_db)):
     # Data
     for row, product in enumerate(products, 2):
         ws.cell(row=row, column=1, value=product.id)
-        ws.cell(row=row, column=2, value=product.name or "")
-        ws.cell(row=row, column=3, value=product.description or "")
+        ws.cell(row=row, column=2, value=product.sku or "")
+        ws.cell(row=row, column=3, value=product.name or "")
         ws.cell(row=row, column=4, value=product.price or 0)
-        ws.cell(row=row, column=5, value=product.cost or 0)
-        ws.cell(row=row, column=6, value=product.category or "")
+        ws.cell(row=row, column=5, value=product.stock or 0)
+        ws.cell(row=row, column=6, value=product.stock_minimo or 0)
     
     # Auto-fit columns
     for col in ws.columns:

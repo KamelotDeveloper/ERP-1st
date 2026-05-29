@@ -351,7 +351,18 @@ def list_ordenes(
         for m in o.materiales_consumidos:
             m.material_name = m.material.name if m.material else None
             m.material_sku = m.material.sku if m.material else None
-            m.stock_actual = stock_actual if m.material else None
+            if m.material:
+                total_in = db.query(func.sum(models.MaterialMovement.quantity)).filter(
+                    models.MaterialMovement.material_id == m.material_id,
+                    models.MaterialMovement.type == "IN"
+                ).scalar() or 0
+                total_out = db.query(func.sum(models.MaterialMovement.quantity)).filter(
+                    models.MaterialMovement.material_id == m.material_id,
+                    models.MaterialMovement.type == "OUT"
+                ).scalar() or 0
+                m.stock_actual = (m.material.current_stock or 0) + total_in - total_out
+            else:
+                m.stock_actual = None
         result.append(o)
     
     return result
@@ -372,7 +383,18 @@ def get_orden(orden_id: int, db: Session = Depends(get_db)):
     for m in orden.materiales_consumidos:
         m.material_name = m.material.name if m.material else None
         m.material_sku = m.material.sku if m.material else None
-        m.stock_actual = stock_actual if m.material else None
+        if m.material:
+            total_in = db.query(func.sum(models.MaterialMovement.quantity)).filter(
+                models.MaterialMovement.material_id == m.material_id,
+                models.MaterialMovement.type == "IN"
+            ).scalar() or 0
+            total_out = db.query(func.sum(models.MaterialMovement.quantity)).filter(
+                models.MaterialMovement.material_id == m.material_id,
+                models.MaterialMovement.type == "OUT"
+            ).scalar() or 0
+            m.stock_actual = (m.material.current_stock or 0) + total_in - total_out
+        else:
+            m.stock_actual = None
     
     return orden
 
@@ -505,20 +527,6 @@ def ejecutar_produccion(
         for m in plantilla.materiales:
             cantidad_necesaria = m.cantidad * data.cantidad
             
-            # Calcular stock actual (from movements + current_stock for compatibility)
-            if m.material:
-                total_in = db.query(func.sum(models.MaterialMovement.quantity)).filter(
-                    models.MaterialMovement.material_id == m.material_id,
-                    models.MaterialMovement.type == "IN"
-                ).scalar() or 0
-                total_out = db.query(func.sum(models.MaterialMovement.quantity)).filter(
-                    models.MaterialMovement.material_id == m.material_id,
-                    models.MaterialMovement.type == "OUT"
-                ).scalar() or 0
-                calculated_stock = (m.material.current_stock or 0) + total_in - total_out
-                # Also update current_stock for backwards compatibility
-                m.material.current_stock = calculated_stock
-            
             # Crear registro de consumo
             consumo = models.MaterialConsumo(
                 orden_id=orden.id,
@@ -528,10 +536,9 @@ def ejecutar_produccion(
             )
             db.add(consumo)
             
-            # Restar del stock (now using calculated stock)
+            # Restar del stock
             if m.material:
                 new_stock = m.material.current_stock - cantidad_necesaria
-                # Don't allow negative stock
                 if new_stock < 0:
                     new_stock = 0
                 m.material.current_stock = new_stock

@@ -129,8 +129,9 @@ def crear_preferencia(data: CrearPreferenciaRequest):
     Crea o actualiza una suscripcion en Supabase y genera link de MercadoPago.
     Fase 1: Si no hay MP_ACCESS_TOKEN, devuelve mock.
     """
-    # Validar plan
-    plan_info = next((p for p in PLANES if p["id"] == data.plan), None)
+    # Validar plan - usar fallback de planes por defecto
+    planes = get_planes_from_supabase()
+    plan_info = next((p for p in planes if p["id"] == data.plan), None)
     if not plan_info:
         raise HTTPException(status_code=400, detail="Plan invalido")
     
