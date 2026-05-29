@@ -44,8 +44,45 @@ El_Menestral_ERP_Setup.exe
 # OpenCode
 .opencode/
 .agents/
+.atl/
 
 # Testsprite
 testsprite_tests/
 opencode.json
 skills-lock.json
+
+# Secrets & Environment
+.env
+.env.*
+backend/.env
+backend/.key_encrypt_secret
+
+# Certificates
+certs/
+backend/certs/
+
+# Database (auto-created at runtime)
+backend/carpinteria.db
+backend/utils/carpinteria.db
+backend/utils/logs/
+
+# Logs & PID files
+*.log
+*.err
+*_pid.txt
+frontend/frontend.log
+frontend/frontend.err
+backend/backend.log
+backend/backend.err
+backend/uvicorn.log
+backend/uvicorn.err
+
+# Embedded repos (not real submodules)
+suscripcion-api/
+
+# Distribution packaging
+distribucion/
+
+# Temp files
+MANUAL_TEST_CHECKLIST.md
+view_plans.py
