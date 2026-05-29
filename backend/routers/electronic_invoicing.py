@@ -8,6 +8,7 @@ from database import SessionLocal
 import models
 from services.afip_service import create_afip_service
 from services.wsfe_client import create_wsaa_client
+from services.key_encrypt import encrypt_key
 
 logger = logging.getLogger(__name__)
 
@@ -153,8 +154,12 @@ async def upload_certificate(
     with open(cert_path, "wb") as f:
         f.write(await certificado.read())
     
+    key_raw = await clave_privada.read()
+    key_encrypted = encrypt_key(key_raw)
     with open(key_path, "wb") as f:
-        f.write(await clave_privada.read())
+        f.write(key_encrypted)
+    
+    logger.info(f"Clave privada encriptada y guardada en {key_path}")
     
     if config.cert_path and os.path.exists(config.cert_path):
         try:

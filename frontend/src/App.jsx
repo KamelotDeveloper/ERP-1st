@@ -12,8 +12,11 @@ import ElectronicInvoicing from "./pages/ElectronicInvoicing";
 import Profile from "./pages/Profile";
 import Produccion from "./pages/Produccion";
 import Budget from "./pages/Budget";
+import Comprobantes from "./pages/Comprobantes";
 import PlanSelection from "./pages/PlanSelection";
 import { iniciarSesion, verificarActivacion } from "./services/suscripcion";
+import { appDataDir } from "@tauri-apps/api/path";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 export default function App() {
   const [tieneAcceso, setTieneAcceso] = useState(false);
@@ -23,12 +26,30 @@ export default function App() {
   useEffect(() => {
     const verificarAcceso = async () => {
       try {
-        // Generar o recuperar client_id
+        // Generar o recuperar client_id con persistencia en Tauri
         let cid = localStorage.getItem("client_id");
+        
+        if (!cid) {
+          // Intentar leer desde Tauri appDataDir (persiste entre reinstalaciones)
+          try {
+            const dir = await appDataDir();
+            const stored = await readTextFile(dir + "client_id.txt");
+            if (stored && stored.trim()) {
+              cid = stored.trim();
+            }
+          } catch (_) {}
+        }
+        
         if (!cid) {
           cid = "user_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
-          localStorage.setItem("client_id", cid);
         }
+        
+        // Guardar en ambos lugares para máxima persistencia
+        try {
+          const dir = await appDataDir();
+          await writeTextFile(dir + "client_id.txt", cid);
+        } catch (_) {}
+        localStorage.setItem("client_id", cid);
         setClientId(cid);
 
         // Verificar licencia usando el nuevo endpoint local
@@ -100,6 +121,7 @@ export default function App() {
             <Route path="/electronic-invoicing" element={<ElectronicInvoicing />} />
             <Route path="/produccion" element={<Produccion />} />
             <Route path="/budget" element={<Budget />} />
+            <Route path="/comprobantes" element={<Comprobantes />} />
           </Routes>
         </div>
       </div>

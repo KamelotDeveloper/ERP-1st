@@ -340,7 +340,10 @@ def list_ordenes(
     if estado:
         query = query.filter(models.OrdenProduccion.estado == estado)
     
-    ordenes = query.order_by(models.OrdenProduccion.fecha_creacion.desc()).offset(skip).limit(limit).all()
+    ordenes = query.order_by(
+        models.OrdenProduccion.fecha_creacion.desc(),
+        models.OrdenProduccion.id.desc()
+    ).offset(skip).limit(limit).all()
     
     result = []
     for o in ordenes:

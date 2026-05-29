@@ -28,7 +28,7 @@ navigate(`${r.page}?highlight=${r.id}`);
 
 return (
 <div className="navbar">
-  <div className="navbar-title">El Menestral</div>
+  <div className="navbar-title">Ordo ERP</div>
   
   <div className="navbar-search">
     <input

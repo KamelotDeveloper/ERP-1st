@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import { downloadFileFromBackend } from "../services/downloadService";
 
 export default function Sales() {
   const [sales, setSales] = useState([]);
@@ -88,9 +89,20 @@ export default function Sales() {
     return c ? c.name : `Cliente #${id}`;
   };
 
+  const handleExport = async () => {
+    const token = localStorage.getItem("token");
+    const url = `/export/sales?token=${token}`;
+    await downloadFileFromBackend(url, "ventas.xlsx");
+  };
+
   return (
     <div className="container">
-      <h2>Ventas</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+        <h2 style={{ margin: 0 }}>Ventas</h2>
+        <button className="btn" onClick={handleExport}>
+          📥 Exportar Excel
+        </button>
+      </div>
 
       {error && (
         <div style={{ color: "red", marginBottom: "15px" }}>{error}</div>

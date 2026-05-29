@@ -13,9 +13,9 @@ export default function Sidebar() {
     <div className="sidebar">
       <div className="sidebar-header">
         <div className="logo">
-          <img src="/em.jpg" alt="El Menestral" />
+          <img src="/GA logo.png" alt="Ordo ERP" />
         </div>
-        <h2>El Menestral</h2>
+        <h2>Ordo ERP</h2>
       </div>
 
       <nav>
@@ -36,6 +36,9 @@ export default function Sidebar() {
         </NavLink>
         <NavLink to="/budget" className="nav-item">
           📝 Presupuestos
+        </NavLink>
+        <NavLink to="/comprobantes" className="nav-item">
+          📋 Comprobantes
         </NavLink>
         <NavLink to="/produccion" className="nav-item">
           🏭 Producción
@@ -62,7 +65,7 @@ export default function Sidebar() {
       </div>
 
       <div className="sidebar-footer">
-        <p>© 2026 El Menestral</p>
+        <p>© 2026 Ordo ERP</p>
       </div>
     </div>
   );

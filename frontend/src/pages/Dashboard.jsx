@@ -140,7 +140,7 @@ return(
 
 <Tooltip/>
 
-<Bar dataKey="value" fill="#22382c"/>
+<Bar dataKey="value" fill="#0ea5e9"/>
 
 </BarChart>
 
@@ -168,7 +168,7 @@ return(
 <Line
 type="monotone"
 dataKey="total"
-stroke="#22382c"
+stroke="#0ea5e9"
 strokeWidth={3}
 />
 
@@ -195,7 +195,7 @@ strokeWidth={3}
 
 <Tooltip/>
 
-<Bar dataKey="qty" fill="#f59e0b"/>
+<Bar dataKey="qty" fill="#3b82f6"/>
 
 </BarChart>
 

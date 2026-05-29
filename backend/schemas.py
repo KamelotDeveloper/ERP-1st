@@ -384,3 +384,214 @@ class PresupuestoConfirmarVentaResponse(BaseModel):
     message: str
     venta_id: Optional[int] = None
     materiales_actualizados: Optional[List[dict]] = None
+
+
+# ==================== ESQUEMAS DE COMPROBANTES FISCALES ====================
+
+class TipoComprobante(str, Enum):
+    """Tipos de comprobantes del sistema (fiscales + internos)"""
+    FACTURA_A = "FACTURA_A"
+    FACTURA_B = "FACTURA_B"
+    FACTURA_C = "FACTURA_C"
+    FACTURA_M = "FACTURA_M"
+    FACTURA_E = "FACTURA_E"
+    NOTA_DEBITO_A = "NOTA_DEBITO_A"
+    NOTA_DEBITO_B = "NOTA_DEBITO_B"
+    NOTA_DEBITO_C = "NOTA_DEBITO_C"
+    NOTA_CREDITO_A = "NOTA_CREDITO_A"
+    NOTA_CREDITO_B = "NOTA_CREDITO_B"
+    NOTA_CREDITO_C = "NOTA_CREDITO_C"
+    RECIBO_A = "RECIBO_A"
+    RECIBO_B = "RECIBO_B"
+    RECIBO_C = "RECIBO_C"
+    REMITO_X = "REMITO_X"
+    REMITO_R = "REMITO_R"
+    TICKET = "TICKET"
+    NOTA_ENVIO = "NOTA_ENVIO"
+    NOTA_RECEPCION = "NOTA_RECEPCION"
+    ORDEN_REPARACION = "ORDEN_REPARACION"
+    NOTA_VENTA = "NOTA_VENTA"
+
+
+class ComprobanteItemBase(BaseModel):
+    comprobante_id: Optional[int] = None
+    product_id: Optional[int] = None
+    descripcion: Optional[str] = None
+    cantidad: float = 1
+    unidad_medida: str = "unidad"
+    precio_unitario: float = 0
+    subtotal: float = 0
+    orden: int = 0
+    iva_alicuota: Optional[float] = None
+    iva_importe: Optional[float] = None
+
+
+class ComprobanteItemCreate(ComprobanteItemBase):
+    pass
+
+
+class ComprobanteItem(ComprobanteItemBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class ComprobanteBase(BaseModel):
+    tipo: TipoComprobante
+    estado: str = "draft"
+    fecha_emision: Optional[datetime] = None
+    fecha_contable: Optional[datetime] = None
+    client_id: Optional[int] = None
+    punto_venta: int = 1
+    numero: Optional[int] = None
+    subtotal: float = 0
+    iva_importe: float = 0
+    total: float = 0
+    notas: Optional[str] = None
+
+    # Fiscal group
+    tipo_afip: Optional[int] = None
+    cae: Optional[str] = None
+    cae_vto: Optional[datetime] = None
+    afip_response: Optional[str] = None
+    comprobante_asociado_id: Optional[int] = None
+
+    # Remito group
+    remito_tipo: Optional[str] = None
+    orden_compra_ref: Optional[str] = None
+
+    # Nota de envío group
+    direccion_envio: Optional[str] = None
+    fecha_estimada_envio: Optional[datetime] = None
+
+    # Nota de recepción group
+    proveedor_ref: Optional[str] = None
+
+    # Orden de reparación group
+    producto_recibido: Optional[str] = None
+    diagnostico: Optional[str] = None
+    tecnico_asignado: Optional[str] = None
+    horas_trabajo: Optional[float] = None
+    fecha_ingreso: Optional[datetime] = None
+    fecha_entrega_estimada: Optional[datetime] = None
+
+
+class ComprobanteCreate(ComprobanteBase):
+    items: List[ComprobanteItemCreate] = Field(..., min_length=1)
+
+
+class ComprobanteUpdate(BaseModel):
+    tipo: Optional[TipoComprobante] = None
+    estado: Optional[str] = None
+    fecha_emision: Optional[datetime] = None
+    fecha_contable: Optional[datetime] = None
+    client_id: Optional[int] = None
+    punto_venta: Optional[int] = None
+    numero: Optional[int] = None
+    subtotal: Optional[float] = None
+    iva_importe: Optional[float] = None
+    total: Optional[float] = None
+    notas: Optional[str] = None
+
+    # Fiscal group
+    tipo_afip: Optional[int] = None
+    cae: Optional[str] = None
+    cae_vto: Optional[datetime] = None
+    afip_response: Optional[str] = None
+    comprobante_asociado_id: Optional[int] = None
+
+    # Remito group
+    remito_tipo: Optional[str] = None
+    orden_compra_ref: Optional[str] = None
+
+    # Nota de envío group
+    direccion_envio: Optional[str] = None
+    fecha_estimada_envio: Optional[datetime] = None
+
+    # Nota de recepción group
+    proveedor_ref: Optional[str] = None
+
+    # Orden de reparación group
+    producto_recibido: Optional[str] = None
+    diagnostico: Optional[str] = None
+    tecnico_asignado: Optional[str] = None
+    horas_trabajo: Optional[float] = None
+    fecha_ingreso: Optional[datetime] = None
+    fecha_entrega_estimada: Optional[datetime] = None
+
+
+class Comprobante(ComprobanteBase):
+    id: int
+    created_by: Optional[int] = None
+    version: int = 1
+    fecha_creacion: datetime
+    fecha_actualizacion: Optional[datetime] = None
+    items: List[ComprobanteItem] = []
+
+    class Config:
+        from_attributes = True
+
+
+class ComprobanteListItem(BaseModel):
+    """Lightweight response for list endpoint."""
+    id: int
+    tipo: str
+    estado: str
+    fecha_emision: Optional[datetime] = None
+    punto_venta: int = 0
+    numero: int = 0
+    total: float = 0
+    cliente: Optional[str] = None
+    numero_formateado: str = ""
+
+    class Config:
+        from_attributes = True
+
+
+class ComprobanteDetail(BaseModel):
+    """Full detail response with items and client name."""
+    id: int
+    tipo: str
+    estado: str
+    fecha_emision: Optional[datetime] = None
+    fecha_contable: Optional[datetime] = None
+    client_id: Optional[int] = None
+    cliente: Optional[str] = None
+    punto_venta: int = 0
+    numero: int = 0
+    subtotal: float = 0
+    iva_importe: float = 0
+    total: float = 0
+    notas: Optional[str] = None
+    created_by: Optional[int] = None
+    version: int = 1
+    fecha_creacion: Optional[datetime] = None
+    fecha_actualizacion: Optional[datetime] = None
+    # Fiscal group
+    tipo_afip: Optional[int] = None
+    cae: Optional[str] = None
+    cae_vto: Optional[datetime] = None
+    afip_response: Optional[str] = None
+    comprobante_asociado_id: Optional[int] = None
+    # Remito group
+    remito_tipo: Optional[str] = None
+    orden_compra_ref: Optional[str] = None
+    # Nota de envío group
+    direccion_envio: Optional[str] = None
+    fecha_estimada_envio: Optional[datetime] = None
+    # Nota de recepción group
+    proveedor_ref: Optional[str] = None
+    # Orden de reparación group
+    producto_recibido: Optional[str] = None
+    diagnostico: Optional[str] = None
+    tecnico_asignado: Optional[str] = None
+    horas_trabajo: Optional[float] = None
+    fecha_ingreso: Optional[datetime] = None
+    fecha_entrega_estimada: Optional[datetime] = None
+    # Extra
+    items: List[ComprobanteItem] = []
+    numero_formateado: str = ""
+
+    class Config:
+        from_attributes = True

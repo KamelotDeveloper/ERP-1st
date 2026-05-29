@@ -1,8 +1,8 @@
 [package]
 name = "ga-software-erp"
 version = "1.0.0"
-description = "El Menestral - Carpintería ERP"
-authors = ["El Menestral"]
+description = "Ordo ERP - Sistema de Gestión"
+authors = ["Ordo ERP"]
 license = ""
 repository = ""
 edition = "2021"

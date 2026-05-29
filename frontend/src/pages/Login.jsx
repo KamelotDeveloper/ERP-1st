@@ -91,7 +91,7 @@ export default function Login({ onLogin }) {
       justifyContent: "center",
       alignItems: "center",
       minHeight: "100vh",
-      backgroundColor: "#f3f4f6"
+      backgroundColor: "#f1f5f9"
     }}>
       <div style={{
         backgroundColor: "white",
@@ -104,10 +104,10 @@ export default function Login({ onLogin }) {
         <h1 style={{
           textAlign: "center",
           marginBottom: "1.5rem",
-          color: "#1f2937",
+          color: "#0f172a",
           fontSize: "1.5rem"
         }}>
-          El Menestral ERP
+          Ordo ERP
         </h1>
 
         {/* Si no está suscrito, mostrar pantalla de suscripción */}
@@ -134,7 +134,7 @@ export default function Login({ onLogin }) {
                 width: "100%",
                 padding: "0.75rem",
                 marginBottom: "1rem",
-                backgroundColor: "#22c55e",
+                backgroundColor: "#0ea5e9",
                 color: "white",
                 border: "none",
                 borderRadius: "4px",
@@ -188,13 +188,13 @@ export default function Login({ onLogin }) {
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 <div style={{
                   padding: "1rem",
-                  border: "2px solid #22c55e",
+                  border: "2px solid #0ea5e9",
                   borderRadius: "8px",
                   cursor: "pointer"
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ fontWeight: "bold" }}>Mensual</span>
-                    <span style={{ fontWeight: "bold", color: "#22c55e" }}>$35.000/mes</span>
+                    <span style={{ fontWeight: "bold", color: "#0ea5e9" }}>$35.000/mes</span>
                   </div>
                 </div>
                 
@@ -208,7 +208,7 @@ export default function Login({ onLogin }) {
                     <span style={{ fontWeight: "bold" }}>Semestral</span>
                     <div>
                       <span style={{ fontWeight: "bold", color: "#3b82f6" }}>$30.000/mes</span>
-                      <span style={{ fontSize: "0.8rem", display: "block", color: "#22c55e" }}>Ahorrás $30.000</span>
+                      <span style={{ fontSize: "0.8rem", display: "block", color: "#0ea5e9" }}>Ahorrás $30.000</span>
                     </div>
                   </div>
                 </div>
@@ -223,7 +223,7 @@ export default function Login({ onLogin }) {
                     <span style={{ fontWeight: "bold" }}>Anual</span>
                     <div>
                       <span style={{ fontWeight: "bold", color: "#8b5cf6" }}>$25.000/mes</span>
-                      <span style={{ fontSize: "0.8rem", display: "block", color: "#22c55e" }}>Ahorrás $120.000</span>
+                      <span style={{ fontSize: "0.8rem", display: "block", color: "#0ea5e9" }}>Ahorrás $120.000</span>
                     </div>
                   </div>
                 </div>
@@ -302,7 +302,7 @@ export default function Login({ onLogin }) {
               style={{
                 width: "100%",
                 padding: "0.75rem",
-                backgroundColor: "#2e86de",
+                backgroundColor: "#0ea5e9",
                 color: "white",
                 border: "none",
                 borderRadius: "4px",

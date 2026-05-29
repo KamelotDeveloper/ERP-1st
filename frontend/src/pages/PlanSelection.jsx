@@ -84,7 +84,7 @@ export default function PlanSelection({ onActivar, clientId }) {
     return (
       <div style={{
         minHeight: "100vh",
-        backgroundColor: "#1f2937",
+        backgroundColor: "#0f172a",
         display: "flex",
         alignItems: "center",
         justifyContent: "center"
@@ -97,7 +97,7 @@ export default function PlanSelection({ onActivar, clientId }) {
   return (
     <div style={{
       minHeight: "100vh",
-      backgroundColor: "#1f2937",
+      backgroundColor: "#0f172a",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
@@ -107,7 +107,7 @@ export default function PlanSelection({ onActivar, clientId }) {
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: "3rem" }}>
         <h1 style={{ color: "white", fontSize: "2.5rem", marginBottom: "0.5rem" }}>
-          GA Software ERP
+          Ordo ERP
         </h1>
         <p style={{ color: "#9ca3af", fontSize: "1.1rem" }}>
           Sistema de gestión para tu empresa
@@ -135,7 +135,7 @@ export default function PlanSelection({ onActivar, clientId }) {
       ) : (
         <div style={{ display: "flex", gap: "20px", justifyContent: "center", marginBottom: "2rem", flexWrap: "wrap" }}>
           {planes.map((plan, index) => {
-            const colors = ["#22c55e", "#3b82f6", "#8b5cf6"];
+            const colors = ["#0ea5e9", "#3b82f6", "#6366f1"];
             const color = colors[index] || "#6b7280";
             
             return (
@@ -206,7 +206,7 @@ export default function PlanSelection({ onActivar, clientId }) {
         disabled={iniciandoTrial || !clientId}
         style={{
           padding: "1rem 2rem",
-          backgroundColor: "#22c55e",
+          backgroundColor: "#0ea5e9",
           color: "white",
           border: "none",
           borderRadius: "8px",
@@ -221,7 +221,7 @@ export default function PlanSelection({ onActivar, clientId }) {
 
       {/* Footer */}
       <p style={{ marginTop: "2rem", color: "#6b7280", fontSize: "0.9rem" }}>
-        © 2026 GA Software
+        © 2026 Ordo ERP
       </p>
     </div>
   );

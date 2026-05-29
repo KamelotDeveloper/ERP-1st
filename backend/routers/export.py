@@ -9,15 +9,6 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 router = APIRouter(prefix="/export", tags=["Export"])
 
-
-def get_db():
-    db = next(get_db())
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 @router.get("/clients")
 def export_clients(db: Session = Depends(get_db)):
     """Export all clients to Excel"""
@@ -184,4 +175,52 @@ def export_materials(db: Session = Depends(get_db)):
         stream,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=materiales.xlsx"}
+    )
+
+
+@router.get("/sales")
+def export_sales(db: Session = Depends(get_db)):
+    """Export all sales to Excel"""
+    sales = db.query(models.Sale, models.Client).join(models.Client).all()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Ventas"
+
+    # Headers
+    headers = ["ID Venta", "Cliente", "Total", "Fecha"]
+    header_fill = PatternFill(start_color="22382c", end_color="22382c", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center")
+
+    # Data
+    for row, (sale, client) in enumerate(sales, 2):
+        ws.cell(row=row, column=1, value=sale.id)
+        ws.cell(row=row, column=2, value=client.name or "")
+        ws.cell(row=row, column=3, value=sale.total or 0)
+        ws.cell(row=row, column=4, value=sale.date.strftime("%Y-%m-%d") if sale.date else "")
+
+    # Auto-fit columns
+    for col in ws.columns:
+        max_length = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            if cell.value:
+                max_length = max(max_length, len(str(cell.value)))
+        ws.column_dimensions[col_letter].width = min(max_length + 2, 40)
+
+    # Save to stream
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=ventas.xlsx"}
     )

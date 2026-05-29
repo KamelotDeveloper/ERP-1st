@@ -3,7 +3,7 @@ import { BaseDirectory, mkdir, writeTextFile, writeFile, exists } from "@tauri-a
 import { save } from "@tauri-apps/plugin-dialog";
 
 const API_URL = import.meta.env.VITE_API_URL || "API_URL";
-const FOLDER_NAME = "El Menestral datos";
+const FOLDER_NAME = "Ordo ERP datos";
 
 // Check if we're running in Tauri
 async function isTauri() {
