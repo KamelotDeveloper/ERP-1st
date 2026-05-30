@@ -29,7 +29,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "dmg"],
+    "targets": ["nsis", "msi", "dmg"],
     "resources": [],
     "externalBin": [
       "./binaries/ga-erp-backend"
