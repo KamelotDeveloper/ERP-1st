@@ -50,12 +50,28 @@ New-Item -ItemType Directory -Path (Join-Path $StagingDir "Assets") -Force | Out
 
 # --- Step 1: Extract NSIS installer ---
 Write-Host "Extracting: $InstallerPath"
-$ExtractLog = Join-Path $OutputDir "extract.log"
-$proc = Start-Process -FilePath $InstallerPath -ArgumentList "/S /D=$ExtractDir" -Wait -PassThru -NoNewWindow
-if ($proc.ExitCode -ne 0) {
-    Write-Error "Installer exited with code $($proc.ExitCode)"
-    exit 1
+
+# Try 7-Zip first (works with NSIS LZMA archives)
+$7zPath = (Get-Command "7z.exe" -ErrorAction SilentlyContinue).Source
+if (-not $7zPath) {
+    $7zExe = Get-ChildItem -Path "C:\Program Files\7-Zip" -Filter "7z.exe" -Recurse | Select-Object -First 1
+    if ($7zExe) { $7zPath = $7zExe.FullName }
 }
+
+if ($7zPath) {
+    Write-Host "Using 7-Zip: $7zPath"
+    $extractLog = Join-Path $OutputDir "7z-extract.log"
+    & $7zPath x "$InstallerPath" -o"$ExtractDir" -y > $extractLog 2>&1
+} else {
+    Write-Host "7-Zip not found, trying NSIS silent install..."
+    $proc = Start-Process -FilePath $InstallerPath -ArgumentList "/S /D=$ExtractDir" -Wait -PassThru -NoNewWindow
+    if ($proc.ExitCode -ne 0) {
+        Write-Error "Installer exited with code $($proc.ExitCode)"
+        exit 1
+    }
+}
+
+# Verify extraction
 $files = Get-ChildItem -Path $ExtractDir -Recurse -File
 if (-not $files) {
     Write-Error "No files extracted - aborting"
