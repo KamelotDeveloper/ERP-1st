@@ -1,88 +1,24 @@
+# Build outputs
+*.msix
+*.msi
+*.zip
+*.exe
+frontend/src-tauri/target/
+
+# NSIS extraction debug
+msix-debug/
+
 # Python
+backend/venv/
 __pycache__/
-*.py[cod]
-*$py.class
 *.pyc
-*.pyo
-*.pyd
-.Python
-venv/
-env/
-.venv/
-*.egg-info/
-dist/
-build/
-*.egg
 
 # Node
-node_modules/
-npm-debug.log
-yarn-error.log
+frontend/node_modules/
+frontend/dist/
 
-# Rust/Tauri
-target/
-# NOTA: Cargo.lock se commitea para apps (build reproducible en CI)
-# Cargo.lock
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Distribución
-dist/
-El_Menestral_ERP*.zip
-El_Menestral_ERP_Setup.exe
-*.exe
-
-# OpenCode
-.opencode/
-.agents/
-.atl/
-
-# Testsprite
-testsprite_tests/
-opencode.json
-skills-lock.json
-
-# Secrets & Environment
-.env
-.env.*
-backend/.env
-backend/.key_encrypt_secret
-
-# Certificates
-certs/
-backend/certs/
-
-# Database (auto-created at runtime)
-backend/carpinteria.db
-backend/utils/carpinteria.db
-backend/utils/logs/
-
-# Logs & PID files
-*.log
-*.err
-*_pid.txt
-frontend/frontend.log
-frontend/frontend.err
-backend/backend.log
-backend/backend.err
-backend/uvicorn.log
-backend/uvicorn.err
-
-# Embedded repos (not real submodules)
-suscripcion-api/
-
-# Distribution packaging
-distribucion/
-
-# Temp files
-MANUAL_TEST_CHECKLIST.md
-view_plans.py
+# DB
+*.db
+*.db-journal
+*.db-wal
+*.db-shm

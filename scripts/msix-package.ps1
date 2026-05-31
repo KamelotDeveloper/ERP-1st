@@ -79,29 +79,40 @@ if (-not $files) {
 }
 Write-Host "Extracted $($files.Count) files"
 
-# --- Step 2: Copy files to App/ ---
+# --- Step 2: Clean up NSIS junk ---
+Write-Host "Cleaning up NSIS installer junk..."
+# Remove NSIS-specific directories (these begin with $)
+Get-ChildItem -Path $ExtractDir -Directory | Where-Object { $_.Name -like '$*' } |
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+# Remove NSIS installer helper files
+Get-ChildItem -Path $ExtractDir -File | Where-Object { $_.Name -like 'uninstall*' -or $_.Name -like 'installer-hooks*' } |
+    Remove-Item -Force -ErrorAction SilentlyContinue
+# Remove any auto-generated MSIX files from source (MakeAppx regenerates them)
+Get-ChildItem -Path $ExtractDir -File | Where-Object { $_.Name -eq '[Content_Types].xml' -or $_.Name -eq 'AppxBlockMap.xml' -or $_.Name -eq 'AppxManifest.xml' } |
+    Remove-Item -Force -ErrorAction SilentlyContinue
+
+# --- Step 3: Copy files to App/ ---
 Write-Host "Copying files to MSIX staging..."
 Copy-Item -Path "$ExtractDir\*" -Destination (Join-Path $StagingDir "App") -Recurse -Force
 
-# --- Step 3: Generate AppxManifest.xml ---
+# --- Step 4: Generate AppxManifest.xml ---
 Write-Host "Creating AppxManifest.xml..."
 
-# Find main executable in extracted files
+# Find main executable: it's the .exe that is NOT the backend
 $MainExe = Get-ChildItem -Path (Join-Path $StagingDir "App") -Filter "*.exe" -Recurse |
-    Where-Object { $_.Name -like "*Ordo*" -or $_.Name -like "*ERP*" } |
-    Select-Object -First 1
+    Where-Object { $_.Name -notlike '*ga-erp-backend*' -and $_.Name -notlike '*backend*' } |
+    Sort-Object Length -Descending | Select-Object -First 1
 
 if (-not $MainExe) {
-    # Fallback: any exe at the root
+    # Fallback: any exe
     $MainExe = Get-ChildItem -Path (Join-Path $StagingDir "App") -Filter "*.exe" -Recurse | Select-Object -First 1
 }
-$RelativeExePath = if ($MainExe) {
-    $rel = [System.IO.Path]::GetRelativePath($StagingDir, $MainExe.FullName)
-    "App\$($MainExe.Name)"
-} else {
-    "App\main.exe"
+if (-not $MainExe) {
+    Write-Error "No executable found in extracted files"
+    exit 1
 }
-Write-Host "Entry point: $RelativeExePath"
+$RelativeExePath = "App\$($MainExe.Name)"
+Write-Host "Entry point: $RelativeExePath ($($MainExe.Length) bytes)"
 
 $Manifest = [System.Text.StringBuilder]::new()
 [void]$Manifest.AppendLine('<?xml version="1.0" encoding="utf-8"?>')
@@ -149,7 +160,7 @@ $ManifestPath = Join-Path $StagingDir "AppxManifest.xml"
 Set-Content -Path $ManifestPath -Value $Manifest.ToString() -Encoding UTF8
 Write-Host "AppxManifest.xml created"
 
-# --- Step 4: Create store assets ---
+# --- Step 5: Create store assets ---
 Write-Host "Creating assets..."
 $AssetSizes = @{
     "StoreLogo.png" = 50
@@ -179,7 +190,7 @@ if (-not (Test-Path (Join-Path $AssetsDir "StoreLogo.png"))) {
     Copy-Item (Join-Path $AssetsDir "StoreLogo.png") (Join-Path $AssetsDir "Square150x150Logo.png") -Force
 }
 
-# --- Step 5: Create MSIX with MakeAppx.exe ---
+# --- Step 6: Create MSIX with MakeAppx.exe ---
 $MsixOutput = Join-Path $OutputDir "${PackageName}_${Version}_${Architecture}.msix"
 Write-Host "Creating MSIX: $MsixOutput"
 
