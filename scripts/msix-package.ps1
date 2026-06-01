@@ -9,17 +9,33 @@ param(
     [string]$OutputDir,
 
     [Parameter(Mandatory=$false)]
-    [string]$IconsDir = ""
+    [string]$IconsDir = "",
+
+    # Store Identity values — get these from Partner Center
+    [Parameter(Mandatory=$false)]
+    [string]$PackageName = "KamelotDev.OrdoERP",
+
+    [Parameter(Mandatory=$false)]
+    [string]$PublisherCN = "CN=39E847D3-689F-47EE-A03A-669CFA3FEE56",
+
+    [Parameter(Mandatory=$false)]
+    [string]$PublisherDisplayName = "Kamelot Dev",
+
+    # Package DisplayName must match the reservation exactly
+    [Parameter(Mandatory=$false)]
+    [string]$PackageDisplayName = "Ordo ERP",
+
+    # Visual DisplayName shown in Start Menu (can be different)
+    [Parameter(Mandatory=$false)]
+    [string]$VisualDisplayName = "Ordo ERP - Sistema de Gestion",
+
+    [Parameter(Mandatory=$false)]
+    [string]$Description = "Sistema de gestion ERP completo con facturacion electronica ARCA/AFIP"
 )
 
 $ErrorActionPreference = "Stop"
 
-$PackageName = "OrdoERP"
 $Architecture = "x64"
-$Publisher = "CN=Kamelot Dev"
-$PublisherDisplayName = "Kamelot Dev"
-$DisplayName = "Ordo ERP - Sistema de Gestión"
-$Description = "Sistema de gestión ERP completo con facturación electrónica ARCA/AFIP"
 
 # --- Find MakeAppx.exe ---
 $MakeAppx = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter "makeappx.exe" -ErrorAction SilentlyContinue |
@@ -122,10 +138,10 @@ $Manifest = [System.Text.StringBuilder]::new()
 [void]$Manifest.AppendLine('  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"')
 [void]$Manifest.AppendLine('  IgnorableNamespaces="uap rescap">')
 [void]$Manifest.AppendLine('')
-[void]$Manifest.AppendLine("  <Identity Name=`"$PackageName`" Publisher=`"$Publisher`" Version=`"$Version`" />")
+[void]$Manifest.AppendLine("  <Identity Name=`"$PackageName`" Publisher=`"$PublisherCN`" Version=`"$Version`" />")
 [void]$Manifest.AppendLine('')
 [void]$Manifest.AppendLine('  <Properties>')
-[void]$Manifest.AppendLine("    <DisplayName>$DisplayName</DisplayName>")
+[void]$Manifest.AppendLine("    <DisplayName>$PackageDisplayName</DisplayName>")
 [void]$Manifest.AppendLine("    <PublisherDisplayName>$PublisherDisplayName</PublisherDisplayName>")
 [void]$Manifest.AppendLine("    <Description>$Description</Description>")
 [void]$Manifest.AppendLine('    <Logo>Assets\StoreLogo.png</Logo>')
@@ -146,7 +162,7 @@ $Manifest = [System.Text.StringBuilder]::new()
 [void]$Manifest.AppendLine('  <Applications>')
 [void]$Manifest.AppendLine("    <Application Id=`"$PackageName`" Executable=`"$RelativeExePath`" EntryPoint=`"Windows.FullTrustApplication`">")
 [void]$Manifest.AppendLine('      <uap:VisualElements')
-[void]$Manifest.AppendLine("        DisplayName=`"$DisplayName`"")
+[void]$Manifest.AppendLine("        DisplayName=`"$VisualDisplayName`"")
 [void]$Manifest.AppendLine("        Description=`"$Description`"")
 [void]$Manifest.AppendLine('        Square150x150Logo="Assets\Square150x150Logo.png"')
 [void]$Manifest.AppendLine('        Square44x44Logo="Assets\Square44x44Logo.png"')
