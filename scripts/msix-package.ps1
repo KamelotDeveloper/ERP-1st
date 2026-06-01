@@ -16,8 +16,8 @@ $ErrorActionPreference = "Stop"
 
 $PackageName = "OrdoERP"
 $Architecture = "x64"
-$Publisher = "CN=Ordo ERP"
-$PublisherDisplayName = "Ordo ERP"
+$Publisher = "CN=Kamelot Dev"
+$PublisherDisplayName = "Kamelot Dev"
 $DisplayName = "Ordo ERP - Sistema de Gestión"
 $Description = "Sistema de gestión ERP completo con facturación electrónica ARCA/AFIP"
 
