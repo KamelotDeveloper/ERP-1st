@@ -1,0 +1,28 @@
+name: Supabase Cron
+
+on:
+  schedule:
+    # Cada 6 horas — ajustá el cron a gusto
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto-vencer suscripciones expiradas
+        run: |
+          curl -s -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/sql" \
+            -H "Content-Type: application/json" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -d '{"query": "UPDATE public.suscripciones SET estado = '\''vencida'\'' WHERE estado = '\''activa'\'' AND fecha_expiracion < now()"}'
+
+      # ──────────────────────────────────────
+      # Acá podés agregar más pasos copiando
+      # el bloque de arriba y cambiando el SQL
+      # ──────────────────────────────────────
+      # - name: Nombre del paso
+      #   run: |
+      #     curl -s -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/sql" \
+      #       ...
