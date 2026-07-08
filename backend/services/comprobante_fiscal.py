@@ -77,6 +77,15 @@ def generate_mock_cae(invoice_data: dict, force_result: Optional[str] = None) ->
         cae_number = f"{prefix}{random.randint(1000000000, 9999999999)}"
         vencimiento = datetime.now() + timedelta(days=10)
 
+        # Log CbtesAsoc when present (NC/ND audit trail)
+        cbtes_asoc = invoice_data.get("CbtesAsoc")
+        if cbtes_asoc:
+            for entry in cbtes_asoc:
+                logger.info(
+                    f"Mock CAE for NC/ND with CbtesAsoc: "
+                    f"Tipo={entry.get('Tipo')} PtoVta={entry.get('PtoVta')} Nro={entry.get('Nro')}"
+                )
+
         logger.info(f"Mock CAE generated successfully: {cae_number}")
 
         return {

@@ -248,6 +248,35 @@ def emitir_comprobante(id: int, db: Session = Depends(get_db)):
     if tipo in FISCAL_TIPOS_B and (c.total or 0) > 10_000_000:
         raise HTTPException(400, detail="Factura B no puede superar $10,000,000")
 
+    # -- CbtesAsoc for NC/ND (tipos AFIP: 2,3,7,8,12,13) --
+    NC_ND_CBTES_ASOC_TIPOS = {2, 3, 7, 8, 12, 13}
+    cbtes_asoc = None
+    if c.tipo_afip in NC_ND_CBTES_ASOC_TIPOS:
+        asoc = c.comprobante_asociado
+        if not asoc:
+            raise HTTPException(
+                400,
+                detail="NC/ND requieren un comprobante asociado",
+            )
+        if not asoc.tipo_afip:
+            raise HTTPException(
+                400,
+                detail="El comprobante asociado no tiene código AFIP (tipo_afip)",
+            )
+        if not asoc.punto_venta:
+            raise HTTPException(
+                400,
+                detail="El comprobante asociado no tiene punto de venta",
+            )
+        if not asoc.numero:
+            raise HTTPException(
+                400,
+                detail="El comprobante asociado no tiene número",
+            )
+        cbtes_asoc = [
+            {"Tipo": asoc.tipo_afip, "PtoVta": asoc.punto_venta, "Nro": asoc.numero},
+        ]
+
     # -- Check ARCA config for real or mock --
     config = db.query(models.ElectronicInvoiceConfig).first()
     use_real = (
@@ -308,10 +337,16 @@ def emitir_comprobante(id: int, db: Session = Depends(get_db)):
             "iva_tipo": 5,  # 21% por defecto
         }
 
+        if cbtes_asoc is not None:
+            invoice_data["CbtesAsoc"] = cbtes_asoc
+
         cae_result = wsfe.request_cae(invoice_data)
     else:
         # Mock CAE (testing / sin certificado)
-        cae_result = generate_mock_cae({"numero": c.numero, "tipo": tipo})
+        mock_data = {"numero": c.numero, "tipo": tipo}
+        if cbtes_asoc is not None:
+            mock_data["CbtesAsoc"] = cbtes_asoc
+        cae_result = generate_mock_cae(mock_data)
 
     if cae_result.get("success"):
         c.cae = cae_result["CAE"]

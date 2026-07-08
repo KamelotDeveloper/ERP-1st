@@ -348,33 +348,39 @@ class WSFEClient:
         iva_importe = invoice_data.get("iva", 0)
         total = subtotal + iva_importe
 
+        det = {
+            "Concepto": invoice_data.get("concepto", 1),  # 1=Productos, 2=Servicios, 3=Ambos
+            "DocTipo": invoice_data.get("cliente_tipo_doc", 96),
+            "DocNro": invoice_data.get("cliente_cuit", "0"),
+            "CbteDesde": cbte_desde,
+            "CbteHasta": cbte_hasta,
+            "CbteFch": datetime.now().strftime("%Y%m%d"),
+            "ImpTotal": round(total, 2),
+            "ImpTotConc": 0,
+            "ImpNeto": round(subtotal, 2),
+            "ImpOpEx": 0,
+            "ImpTrib": 0,
+            "ImpIVA": round(iva_importe, 2),
+            "MonId": "PES",
+            "MonCotiz": 1,
+            "Iva": [{
+                "Id": invoice_data.get("iva_tipo", 5),
+                "BaseImp": round(subtotal, 2),
+                "Importe": round(iva_importe, 2),
+            }],
+        }
+
+        # Add CbtesAsoc for NC/ND (present only when invoice_data includes it)
+        if "CbtesAsoc" in invoice_data:
+            det["CbtesAsoc"] = invoice_data["CbtesAsoc"]
+
         return {
             "FeCabReq": {
                 "CantReg": 1,
                 "PtoVta": pto_vta,
                 "CbteTipo": cbte_tipo,
             },
-            "FeDetReq": [{
-                "Concepto": invoice_data.get("concepto", 1),  # 1=Productos, 2=Servicios, 3=Ambos
-                "DocTipo": invoice_data.get("cliente_tipo_doc", 96),
-                "DocNro": invoice_data.get("cliente_cuit", "0"),
-                "CbteDesde": cbte_desde,
-                "CbteHasta": cbte_hasta,
-                "CbteFch": datetime.now().strftime("%Y%m%d"),
-                "ImpTotal": round(total, 2),
-                "ImpTotConc": 0,
-                "ImpNeto": round(subtotal, 2),
-                "ImpOpEx": 0,
-                "ImpTrib": 0,
-                "ImpIVA": round(iva_importe, 2),
-                "MonId": "PES",
-                "MonCotiz": 1,
-                "Iva": [{
-                    "Id": invoice_data.get("iva_tipo", 5),
-                    "BaseImp": round(subtotal, 2),
-                    "Importe": round(iva_importe, 2),
-                }],
-            }],
+            "FeDetReq": [det],
         }
     
     def request_cae(self, invoice_data: Dict[str, Any], retry: bool = True) -> Dict[str, Any]:
@@ -505,19 +511,23 @@ class WSFEClient:
                 if isinstance(val, dict):
                     xml_parts.append(f"<{tag}>{_dict_to_xml(val, ns)}</{tag}>")
                 elif isinstance(val, list):
+                    child_tag = key.rstrip("s") if key.endswith("s") else key
+                    # Map list names to their child element names per WSDL
+                    child_map = {
+                        "FeDetReq": "FECAEDetRequest",
+                        "Iva": "AlicIva",
+                        "CbtesAsoc": "CbteAsoc",
+                    }
+                    child_name = child_map.get(key, child_tag)
+                    child_tag_ns = f"{ns}{child_name}" if ns else child_name
+                    # Build items XML, then wrap in parent tag (WSDL-compliant structure)
+                    items_xml = ""
                     for item in val:
-                        child_tag = key.rstrip("s") if key.endswith("s") else key  # Iva -> Iva, FeDetReq -> FECAEDetRequest
-                        # Map list names to their child element names per WSDL
-                        child_map = {
-                            "FeDetReq": "FECAEDetRequest",
-                            "Iva": "AlicIva",
-                        }
-                        child_name = child_map.get(key, child_tag)
-                        child_tag_ns = f"{ns}{child_name}" if ns else child_name
                         if isinstance(item, dict):
-                            xml_parts.append(f"<{child_tag_ns}>{_dict_to_xml(item, ns)}</{child_tag_ns}>")
+                            items_xml += f"<{child_tag_ns}>{_dict_to_xml(item, ns)}</{child_tag_ns}>"
                         else:
-                            xml_parts.append(f"<{child_tag_ns}>{_xml_esc(item)}</{child_tag_ns}>")
+                            items_xml += f"<{child_tag_ns}>{_xml_esc(item)}</{child_tag_ns}>"
+                    xml_parts.append(f"<{tag}>{items_xml}</{tag}>")
                 else:
                     xml_parts.append(f"<{tag}>{_xml_esc(val)}</{tag}>")
             return "".join(xml_parts)
