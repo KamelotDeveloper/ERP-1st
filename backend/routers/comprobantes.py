@@ -296,6 +296,20 @@ def emitir_comprobante(id: int, db: Session = Depends(get_db)):
         and config.CUIT
     )
 
+    # -- Resolve CondicionIVAReceptorId (needed for both real and mock) --
+    cond_iva_receptor = c.cliente.condicion_iva_receptor_id if c.cliente else None
+    if cond_iva_receptor is None:
+        cond_iva_receptor = COND_IVA_RECEPTOR_FALLBACK.get(tipo, 4)
+
+    # -- Build items_raw for per-rate IVA grouping (needed for both real and mock) --
+    items_raw = []
+    for item in (c.items or []):
+        items_raw.append({
+            "subtotal": round(item.subtotal or 0, 2),
+            "iva_alicuota": item.iva_alicuota or 0.0,
+            "iva_importe": round(item.iva_importe or 0, 2),
+        })
+
     if use_real:
         # Real WSFE
         from services.wsfe_client import create_wsfe_client
@@ -328,20 +342,6 @@ def emitir_comprobante(id: int, db: Session = Depends(get_db)):
                 f"usando número local {c.numero} como fallback. "
                 f"Error: {ultimo_result.get('error', 'desconocido')}"
             )
-
-        # -- Resolve CondicionIVAReceptorId --
-        cond_iva_receptor = c.cliente.condicion_iva_receptor_id if c.cliente else None
-        if cond_iva_receptor is None:
-            cond_iva_receptor = COND_IVA_RECEPTOR_FALLBACK.get(tipo, 4)
-
-        # -- Build items_raw for per-rate IVA grouping --
-        items_raw = []
-        for item in (c.items or []):
-            items_raw.append({
-                "subtotal": round(item.subtotal or 0, 2),
-                "iva_alicuota": item.iva_alicuota or 0.0,
-                "iva_importe": round(item.iva_importe or 0, 2),
-            })
 
         # Preparar datos para WSFE
         cliente_cuit = c.cliente.tax_id.replace("-", "") if c.cliente and c.cliente.tax_id else "0"
