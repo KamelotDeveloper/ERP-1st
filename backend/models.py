@@ -35,6 +35,7 @@ class Client(Base):
     phone=Column(String)
     address=Column(String, nullable=True)
     tax_id=Column(String, nullable=True)  # CUIT para factura
+    condicion_iva_receptor_id=Column(Integer, nullable=True)  # RG 5616: 1=RI, 4=CF, 3=Monotributo, 8=Exportación
 
 
 class Product(Base):
@@ -58,6 +59,7 @@ class Material(Base):
     name=Column(String, nullable=False)
     category=Column(String)
     unit_cost=Column(Float, default=0)
+    unit_price=Column(Float, default=0)
     current_stock=Column(Float, default=0)
     stock_minimo=Column(Integer, default=0)
     version=Column(Integer, default=1)
@@ -86,6 +88,7 @@ class Sale(Base):
     client_id=Column(Integer,ForeignKey("clients.id"))
     total=Column(Float)
     date=Column(DateTime,default=datetime.utcnow)
+    payment_method=Column(String,default="efectivo")
 
     items=relationship("SaleItem",back_populates="sale")
 
@@ -362,6 +365,9 @@ class Comprobante(Base):
     fecha_ingreso = Column(DateTime, nullable=True)
     fecha_entrega_estimada = Column(DateTime, nullable=True)
 
+    # Stock reversal (for NC)
+    stock_reversed = Column(Boolean, default=False)
+
     # Relationships
     cliente = relationship("Client", foreign_keys=[client_id])
     items = relationship("ComprobanteItem", back_populates="comprobante", cascade="all, delete-orphan")
@@ -384,7 +390,9 @@ class ComprobanteItem(Base):
     orden = Column(Integer, default=0)
     iva_alicuota = Column(Float, nullable=True)  # % IVA aplicado (ej: 21.0, 10.5)
     iva_importe = Column(Float, nullable=True)
+    material_id = Column(Integer, ForeignKey("materials.id"), nullable=True)
 
     # Relationships
     comprobante = relationship("Comprobante", back_populates="items")
     product = relationship("Product")
+    material = relationship("Material")

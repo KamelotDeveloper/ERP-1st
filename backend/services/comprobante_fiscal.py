@@ -86,6 +86,28 @@ def generate_mock_cae(invoice_data: dict, force_result: Optional[str] = None) ->
                     f"Tipo={entry.get('Tipo')} PtoVta={entry.get('PtoVta')} Nro={entry.get('Nro')}"
                 )
 
+        # Log AlicIva groupings for audit parity
+        items_raw = invoice_data.get("items_raw", [])
+        if items_raw:
+            iva_groups: dict[float, dict] = {}
+            for item in items_raw:
+                rate = round(item.get("iva_alicuota", 0), 2)
+                if rate not in iva_groups:
+                    iva_groups[rate] = {"BaseImp": 0.0, "Importe": 0.0}
+                iva_groups[rate]["BaseImp"] += item.get("subtotal", 0)
+                iva_groups[rate]["Importe"] += item.get("iva_importe", 0)
+            for rate, amounts in sorted(iva_groups.items()):
+                logger.info(
+                    f"Mock AlicIva: tasa={rate}% "
+                    f"BaseImp={round(amounts['BaseImp'], 2)} "
+                    f"Importe={round(amounts['Importe'], 2)}"
+                )
+
+        # Log CondicionIVAReceptorId for audit parity
+        cond_id = invoice_data.get("condicion_iva_receptor_id")
+        if cond_id is not None:
+            logger.info(f"Mock CondicionIVAReceptorId={cond_id}")
+
         logger.info(f"Mock CAE generated successfully: {cae_number}")
 
         return {

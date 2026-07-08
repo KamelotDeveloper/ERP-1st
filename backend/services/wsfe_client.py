@@ -348,6 +348,19 @@ class WSFEClient:
         iva_importe = invoice_data.get("iva", 0)
         total = subtotal + iva_importe
 
+        # IVA % → ARCA Id mapping (RG 5616: 3=0%, 4=10.5%, 5=21%, 6=27%)
+        IVA_ALICUOTA_TO_ID: dict[float, int] = {0: 3, 10.5: 4, 21.0: 5, 27.0: 6}
+
+        # Build AlicIva array: group items_raw by iva_alicuota
+        items_raw = invoice_data.get("items_raw", [])
+        iva_groups: dict[float, dict] = {}
+        for item in items_raw:
+            rate = round(item.get("iva_alicuota", 0), 2)
+            if rate not in iva_groups:
+                iva_groups[rate] = {"BaseImp": 0.0, "Importe": 0.0}
+            iva_groups[rate]["BaseImp"] += item.get("subtotal", 0)
+            iva_groups[rate]["Importe"] += item.get("iva_importe", 0)
+
         det = {
             "Concepto": invoice_data.get("concepto", 1),  # 1=Productos, 2=Servicios, 3=Ambos
             "DocTipo": invoice_data.get("cliente_tipo_doc", 96),
@@ -363,12 +376,24 @@ class WSFEClient:
             "ImpIVA": round(iva_importe, 2),
             "MonId": "PES",
             "MonCotiz": 1,
-            "Iva": [{
-                "Id": invoice_data.get("iva_tipo", 5),
-                "BaseImp": round(subtotal, 2),
-                "Importe": round(iva_importe, 2),
-            }],
         }
+
+        # AlicIva: one entry per IVA rate, omitted entirely if no IVA
+        if iva_groups and round(iva_importe, 2) > 0:
+            iva_list = []
+            for rate, amounts in sorted(iva_groups.items()):
+                iva_id = IVA_ALICUOTA_TO_ID.get(rate, 5)  # default 21% for unmapped
+                iva_list.append({
+                    "Id": iva_id,
+                    "BaseImp": round(amounts["BaseImp"], 2),
+                    "Importe": round(amounts["Importe"], 2),
+                })
+            det["Iva"] = iva_list
+
+        # CondicionIVAReceptorId (RG 5616 — mandatory)
+        cond_id = invoice_data.get("condicion_iva_receptor_id")
+        if cond_id is not None:
+            det["CondicionIVAReceptorId"] = cond_id
 
         # Add CbtesAsoc for NC/ND (present only when invoice_data includes it)
         if "CbtesAsoc" in invoice_data:

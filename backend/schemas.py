@@ -75,6 +75,7 @@ class ClientBase(BaseModel):
     address: Optional[str] = Field(None, max_length=300)
     # Acepta CUIT con o sin guiones: XX-XXXXXXXX-X o XXXXXXXXXXX o vacio
     tax_id: Optional[str] = Field(None, pattern=r"^\d{2}-\d{8}-\d{1}$|^\d{11}$|^$")
+    condicion_iva_receptor_id: Optional[int] = Field(None, ge=1, le=99)  # RG 5616
 
 
 class ClientCreate(ClientBase):
@@ -121,6 +122,7 @@ class MaterialBase(BaseModel):
     category: str = Field(..., min_length=1, max_length=100)
     current_stock: float = Field(..., ge=0)
     unit_cost: float = Field(..., ge=0)
+    unit_price: float = Field(0, ge=0)
     stock_minimo: int = Field(0, ge=0)
 
 
@@ -148,6 +150,7 @@ class SaleItemCreate(BaseModel):
 class SaleCreate(BaseModel):
     client_id: int = Field(..., gt=0)  # Mayor que 0
     items: List[SaleItemCreate] = Field(..., min_length=1)  # Al menos 1 item
+    payment_method: Optional[str] = "efectivo"
 
 
 class Sale(BaseModel):
@@ -155,9 +158,33 @@ class Sale(BaseModel):
     client_id: int
     total: float
     date: datetime
+    payment_method: str = "efectivo"
 
     class Config:
         from_attributes = True
+
+
+class PurchaseHistoryItem(BaseModel):
+    id: int
+    product_name: str
+    quantity: int
+    price: float
+    subtotal: float
+
+
+class PurchaseHistorySale(BaseModel):
+    sale_id: int
+    date: datetime
+    items: List[PurchaseHistoryItem]
+    total: float
+    payment_method: str = "efectivo"
+
+
+class PurchaseHistoryResponse(BaseModel):
+    purchases: List[PurchaseHistorySale]
+    total_count: int
+    page: int
+    limit: int
 
 
 class MaterialMovement(BaseModel):
@@ -416,6 +443,7 @@ class TipoComprobante(str, Enum):
 class ComprobanteItemBase(BaseModel):
     comprobante_id: Optional[int] = None
     product_id: Optional[int] = None
+    material_id: Optional[int] = None
     descripcion: Optional[str] = None
     cantidad: float = 1
     unidad_medida: str = "unidad"
@@ -432,6 +460,7 @@ class ComprobanteItemCreate(ComprobanteItemBase):
 
 class ComprobanteItem(ComprobanteItemBase):
     id: int
+    material_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -589,6 +618,8 @@ class ComprobanteDetail(BaseModel):
     horas_trabajo: Optional[float] = None
     fecha_ingreso: Optional[datetime] = None
     fecha_entrega_estimada: Optional[datetime] = None
+    # Stock reversal
+    stock_reversed: bool = False
     # Extra
     items: List[ComprobanteItem] = []
     numero_formateado: str = ""

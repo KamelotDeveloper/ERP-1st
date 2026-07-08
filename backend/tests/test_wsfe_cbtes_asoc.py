@@ -145,6 +145,10 @@ class TestCbtesAsocXmlOutput:
     def test_xml_cbtes_asoc_order_around_iva(self, wsfe_client):
         """CbtesAsoc block appears in FeDetReq alongside Iva (positional check is lenient)."""
         invoice_data = _build_nc_invoice_data()
+        invoice_data["items_raw"] = [
+            {"subtotal": 100.0, "iva_alicuota": 21.0, "iva_importe": 21.0},
+        ]
+        invoice_data["condicion_iva_receptor_id"] = 1
         fe_request = wsfe_client._build_fe_cae_request(invoice_data)
         auth = wsfe_client.wsaa_client.get_valid_token()
         soap = wsfe_client._build_soap_request(auth, fe_request)

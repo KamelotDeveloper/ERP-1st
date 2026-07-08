@@ -202,6 +202,15 @@ def _reverse_stock(db: Session, c: models.Comprobante):
     c.stock_reversed = True
 
 
+# CondicionIVAReceptorId fallback per comprobante tipo (RG 5616)
+COND_IVA_RECEPTOR_FALLBACK: dict[str, int] = {
+    "FACTURA_A": 1, "NOTA_DEBITO_A": 1, "NOTA_CREDITO_A": 1,
+    "FACTURA_B": 4, "NOTA_DEBITO_B": 4, "NOTA_CREDITO_B": 4,
+    "FACTURA_C": 5, "NOTA_DEBITO_C": 5, "NOTA_CREDITO_C": 5,
+    "FACTURA_M": 1, "FACTURA_E": 8,
+}
+
+
 # ---------------------------------------------------------------------------
 # POST /comprobantes/{id}/emitir — Emitir (solicitar CAE) un comprobante fiscal
 # ---------------------------------------------------------------------------
@@ -320,6 +329,20 @@ def emitir_comprobante(id: int, db: Session = Depends(get_db)):
                 f"Error: {ultimo_result.get('error', 'desconocido')}"
             )
 
+        # -- Resolve CondicionIVAReceptorId --
+        cond_iva_receptor = c.cliente.condicion_iva_receptor_id if c.cliente else None
+        if cond_iva_receptor is None:
+            cond_iva_receptor = COND_IVA_RECEPTOR_FALLBACK.get(tipo, 4)
+
+        # -- Build items_raw for per-rate IVA grouping --
+        items_raw = []
+        for item in (c.items or []):
+            items_raw.append({
+                "subtotal": round(item.subtotal or 0, 2),
+                "iva_alicuota": item.iva_alicuota or 0.0,
+                "iva_importe": round(item.iva_importe or 0, 2),
+            })
+
         # Preparar datos para WSFE
         cliente_cuit = c.cliente.tax_id.replace("-", "") if c.cliente and c.cliente.tax_id else "0"
         doc_tipo, doc_nro = get_client_tipo_doc(cliente_cuit)
@@ -334,7 +357,8 @@ def emitir_comprobante(id: int, db: Session = Depends(get_db)):
             "subtotal": round(c.subtotal or 0, 2),
             "iva": round(c.iva_importe or 0, 2),
             "total": round(c.total or 0, 2),
-            "iva_tipo": 5,  # 21% por defecto
+            "items_raw": items_raw,
+            "condicion_iva_receptor_id": cond_iva_receptor,
         }
 
         if cbtes_asoc is not None:
@@ -343,7 +367,12 @@ def emitir_comprobante(id: int, db: Session = Depends(get_db)):
         cae_result = wsfe.request_cae(invoice_data)
     else:
         # Mock CAE (testing / sin certificado)
-        mock_data = {"numero": c.numero, "tipo": tipo}
+        mock_data = {
+            "numero": c.numero,
+            "tipo": tipo,
+            "items_raw": items_raw,
+            "condicion_iva_receptor_id": cond_iva_receptor,
+        }
         if cbtes_asoc is not None:
             mock_data["CbtesAsoc"] = cbtes_asoc
         cae_result = generate_mock_cae(mock_data)
