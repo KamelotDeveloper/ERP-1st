@@ -7,6 +7,7 @@ Tests cover:
 """
 
 from unittest.mock import MagicMock, patch
+import httpx
 import pytest
 import xml.etree.ElementTree as ET
 
@@ -188,7 +189,7 @@ class TestGetUltimoAutorizadoFallback:
         with patch("httpx.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value.__enter__.return_value = mock_instance
-            mock_instance.post.side_effect = TimeoutError("Connection timed out")
+            mock_instance.post.side_effect = httpx.TimeoutException("Connection timed out")
 
             result = wsfe_client.get_ultimo_autorizado(1, 6)
 
@@ -196,11 +197,17 @@ class TestGetUltimoAutorizadoFallback:
         assert "error" in result
 
     def test_network_error_returns_success_false(self, wsfe_client):
-        """Generic HTTP error returns success=False."""
+        """httpx.HTTPStatusError returns success=False."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+
         with patch("httpx.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value.__enter__.return_value = mock_instance
-            mock_instance.post.side_effect = ConnectionError("Connection refused")
+            mock_instance.post.side_effect = httpx.HTTPStatusError(
+                "500 Server Error", request=MagicMock(), response=mock_response
+            )
 
             result = wsfe_client.get_ultimo_autorizado(1, 6)
 
