@@ -647,57 +647,226 @@ class WSFEClient:
                 "raw_response": response_xml[:500]
             }
     
-    def get_last_invoice_number(self, punto_venta: int, tipo_comprobante: int) -> Dict[str, Any]:
-        """Obtiene el último número de comprobante autorizado"""
-        auth = self.wsaa_client.get_valid_token()
-        
-        if not auth or not auth.get("success"):
-            return {
-                "success": False,
-                "error": "No se pudo obtener token"
-            }
-        
-        try:
-            wsfe_url = self.wsaa_client.get_wsfe_url()
-            
-            # Auth como parte del Body, no del Header (según WSDL)
-            soap_body = f'''<?xml version="1.0" encoding="UTF-8"?>
+    # ------------------------------------------------------------------
+    # FECompUltimoAutorizado
+    # ------------------------------------------------------------------
+    def _build_ultimo_autorizado_request(self, auth: Dict[str, Any], pto_vta: int, cbte_tipo: int) -> str:
+        """Construye el SOAP envelope para FECompUltimoAutorizado.
+
+        Args:
+            auth: Dict con Token, Sign del WSAA.
+            pto_vta: Número de punto de venta.
+            cbte_tipo: Código de tipo de comprobante AFIP.
+
+        Returns:
+            String XML del SOAP envelope listo para POST.
+        """
+        token = self._xml_esc(auth.get("token", ""))
+        sign = self._xml_esc(auth.get("sign", ""))
+        cuit = self._xml_esc(self.wsaa_client.CUIT)
+
+        soap = f'''<?xml version="1.0" encoding="UTF-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
                xmlns:ns1="http://ar.gov.afip.dif.FEV1/">
     <soap:Header/>
     <soap:Body>
-        <ns1:FECompTotXRequest>
+        <ns1:FECompUltimoAutorizado>
             <ns1:Auth>
-                <ns1:Token>{self._xml_esc(auth.get("token", ""))}</ns1:Token>
-                <ns1:Sign>{self._xml_esc(auth.get("sign", ""))}</ns1:Sign>
-                <ns1:Cuit>{self.wsaa_client.CUIT}</ns1:Cuit>
+                <ns1:Token>{token}</ns1:Token>
+                <ns1:Sign>{sign}</ns1:Sign>
+                <ns1:Cuit>{cuit}</ns1:Cuit>
             </ns1:Auth>
-        </ns1:FECompTotXRequest>
+            <ns1:FeCompUltimoAutorizadoReq>
+                <ns1:PtoVta>{pto_vta}</ns1:PtoVta>
+                <ns1:CbteTipo>{cbte_tipo}</ns1:CbteTipo>
+            </ns1:FeCompUltimoAutorizadoReq>
+        </ns1:FECompUltimoAutorizado>
     </soap:Body>
 </soap:Envelope>'''
-            
-            with httpx.Client(timeout=30.0) as client:
-                response = client.post(
-                    wsfe_url,
-                    content=soap_body,
-                    headers={'Content-Type': 'text/xml; charset=utf-8'}
-                )
-            
+        return soap
+
+    def _parse_ultimo_autorizado_response(self, response_xml: str) -> Dict[str, Any]:
+        """Parsea la respuesta XML de FECompUltimoAutorizado.
+
+        Args:
+            response_xml: Respuesta XML cruda de ARCA.
+
+        Returns:
+            Dict con success, ultimo_numero en éxito;
+            success=False con error/errores en fallo.
+        """
+        NS_FEV1 = "http://ar.gov.afip.dif.FEV1/"
+
+        try:
             import xml.etree.ElementTree as ET
-            root = ET.fromstring(response.text)
-            
-            nro_elem = root.find('.//Nro')
-            nro = int(nro_elem.text) if nro_elem is not None else 0
-            
+            root = ET.fromstring(response_xml)
+
+            # --- SOAP Fault ---
+            fault_elem = root.find('.//{http://schemas.xmlsoap.org/soap/envelope/}Fault')
+            if fault_elem is not None:
+                fault_string = fault_elem.find('faultcode')
+                return {
+                    "success": False,
+                    "error": f"SOAP Fault: {fault_string.text if fault_string is not None else 'Unknown'}",
+                    "errores": [{
+                        "code": fault_string.text if fault_string is not None else "SOAP",
+                        "msg": "Error SOAP en FECompUltimoAutorizado"
+                    }],
+                }
+
+            # --- CbteNro (éxito) ---
+            cbte_nro = root.find(f'.//{{{NS_FEV1}}}CbteNro')
+
+            # Fallback: buscar sin namespace (algunos entornos testing omiten xmlns)
+            if cbte_nro is None:
+                cbte_nro = root.find('.//CbteNro')
+
+            if cbte_nro is not None and cbte_nro.text is not None:
+                return {
+                    "success": True,
+                    "ultimo_numero": int(cbte_nro.text),
+                }
+
+            # --- Errores de negocio ---
+            errores = []
+            for err in root.findall(f'.//{{{NS_FEV1}}}Err'):
+                code_el = err.find(f'{{{NS_FEV1}}}Code')
+                msg_el = err.find(f'{{{NS_FEV1}}}Msg')
+                if code_el is not None or msg_el is not None:
+                    errores.append({
+                        "code": code_el.text if code_el is not None else "0",
+                        "msg": msg_el.text if msg_el is not None else "Error desconocido",
+                    })
+
+            # Fallback sin namespace
+            if not errores:
+                for err in root.findall('.//Err'):
+                    code_el = err.find('Code')
+                    msg_el = err.find('Msg')
+                    if code_el is not None or msg_el is not None:
+                        errores.append({
+                            "code": code_el.text if code_el is not None else "0",
+                            "msg": msg_el.text if msg_el is not None else "Error desconocido",
+                        })
+
+            if errores:
+                return {
+                    "success": False,
+                    "error": f"ARCA error: {errores[0]['code']} — {errores[0]['msg']}",
+                    "errores": errores,
+                }
+
             return {
-                "success": True,
-                "ultimo_numero": nro
+                "success": False,
+                "error": "No se encontró CbteNro en la respuesta de FECompUltimoAutorizado",
             }
-            
+
+        except ET.ParseError as e:
+            return {
+                "success": False,
+                "error": f"Error parseando XML respuesta FECompUltimoAutorizado: {str(e)}",
+            }
         except Exception as e:
             return {
                 "success": False,
-                "error": str(e)
+                "error": f"Error parseando FECompUltimoAutorizado: {str(e)}",
+            }
+
+    def get_ultimo_autorizado(self, pto_vta: int, cbte_tipo: int, retry: bool = True) -> Dict[str, Any]:
+        """FECompUltimoAutorizado — último nro autorizado por ARCA para PV+tipo.
+
+        Llama al verbo WSDL FECompUltimoAutorizado con Auth + PtoVta + CbteTipo.
+        Si el token expira, renueva automáticamente y reintenta una vez.
+
+        Args:
+            pto_vta: Número de punto de venta (ej: 1).
+            cbte_tipo: Código AFIP de tipo de comprobante (ej: 6 para Factura B).
+            retry: Si debe reintentar al fallar por autenticación (default True).
+
+        Returns:
+            {"success": True, "ultimo_numero": int} en éxito.
+            {"success": False, "error": str, ...} en fallo.
+        """
+        auth = self.wsaa_client.get_valid_token()
+
+        if not auth or not auth.get("success"):
+            return {
+                "success": False,
+                "error": "No se pudo obtener token de autenticación",
+                "details": auth,
+            }
+
+        try:
+            wsfe_url = self.wsaa_client.get_wsfe_url()
+            logger.info(f"FECompUltimoAutorizado — PV={pto_vta} Tipo={cbte_tipo} → {wsfe_url}")
+
+            soap_body = self._build_ultimo_autorizado_request(auth, pto_vta, cbte_tipo)
+
+            headers = {
+                'Content-Type': 'text/xml; charset=utf-8',
+                'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FECompUltimoAutorizado',
+            }
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(wsfe_url, content=soap_body, headers=headers)
+
+            result = self._parse_ultimo_autorizado_response(response.text)
+
+            # Auto-retry on auth errors: renovar token y reintentar una vez
+            if retry and not result.get("success"):
+                should_retry = False
+                errores = result.get("errores", [])
+                for err in errores:
+                    code = str(err.get("code", ""))
+                    if code in (
+                        "600", "601", "602", "603", "604", "605",
+                        "606", "607", "608", "609", "10001",
+                    ):
+                        should_retry = True
+                        break
+
+                if should_retry:
+                    logger.info(
+                        "Token expirado en FECompUltimoAutorizado — "
+                        "renovando y reintentando..."
+                    )
+                    renewed = self.wsaa_client.request_token()
+                    if renewed.get("success"):
+                        soap_body_retry = self._build_ultimo_autorizado_request(
+                            renewed, pto_vta, cbte_tipo
+                        )
+                        with httpx.Client(timeout=30.0) as client:
+                            response = client.post(
+                                wsfe_url, content=soap_body_retry, headers=headers
+                            )
+                        result = self._parse_ultimo_autorizado_response(response.text)
+                        logger.info(
+                            f"Reintento FECompUltimoAutorizado: "
+                            f"{'OK' if result.get('success') else 'Falló'}"
+                        )
+
+            return result
+
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout en FECompUltimoAutorizado: {str(e)}")
+            return {
+                "success": False,
+                "error": "Timeout de conexión con ARCA — FECompUltimoAutorizado no disponible",
+            }
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"Error HTTP en FECompUltimoAutorizado: "
+                f"{e.response.status_code} — {e.response.text[:300]}"
+            )
+            return {
+                "success": False,
+                "error": f"Error HTTP {e.response.status_code} en FECompUltimoAutorizado",
+            }
+        except Exception as e:
+            logger.error(f"Error en FECompUltimoAutorizado: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": f"Error FECompUltimoAutorizado: {str(e)}",
             }
 
 

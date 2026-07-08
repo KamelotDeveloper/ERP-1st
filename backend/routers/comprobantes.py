@@ -70,6 +70,10 @@ FISCAL_TIPOS = {
     "NOTA_CREDITO_A", "NOTA_CREDITO_B", "NOTA_CREDITO_C",
 }
 
+NC_TIPOS = {
+    "NOTA_CREDITO_A", "NOTA_CREDITO_B", "NOTA_CREDITO_C",
+}
+
 NC_ND_TIPOS = {
     "NOTA_DEBITO_A", "NOTA_DEBITO_B", "NOTA_DEBITO_C",
     "NOTA_CREDITO_A", "NOTA_CREDITO_B", "NOTA_CREDITO_C",
@@ -139,11 +143,14 @@ def _build_detail(c: models.Comprobante) -> dict:
         "fecha_ingreso": c.fecha_ingreso,
         "fecha_entrega_estimada": c.fecha_entrega_estimada,
         "cliente": c.cliente.name if c.cliente else None,
+        "stock_reversed": c.stock_reversed or False,
         "items": [
             {
                 "id": item.id,
                 "comprobante_id": item.comprobante_id,
                 "product_id": item.product_id,
+                "material_id": item.material_id,
+                "material_name": item.material.name if item.material else None,
                 "descripcion": item.descripcion,
                 "cantidad": item.cantidad,
                 "unidad_medida": item.unidad_medida,
@@ -157,6 +164,42 @@ def _build_detail(c: models.Comprobante) -> dict:
         ],
         "numero_formateado": format_numero(c.punto_venta, c.numero),
     }
+
+
+# ---------------------------------------------------------------------------
+# Helpers — Stock reversal (Nota de Crédito)
+# ---------------------------------------------------------------------------
+def _reverse_stock(db: Session, c: models.Comprobante):
+    """Reverse product/material stock for a Nota de Crédito emission.
+
+    Idempotent: skips if c.stock_reversed is already True.
+    Runs inside the emitir transaction — failure rolls back CAE too.
+    """
+    if c.stock_reversed:
+        return
+
+    for item in (c.items or []):
+        if item.product_id:
+            p = db.query(models.Product).filter(models.Product.id == item.product_id).first()
+            if p:
+                p.stock = (p.stock or 0) + int(item.cantidad)
+                db.flush()
+
+        if item.material_id:
+            m = db.query(models.Material).filter(models.Material.id == item.material_id).first()
+            if m:
+                m.current_stock = (m.current_stock or 0) + item.cantidad
+                db.flush()
+
+            movement = models.MaterialMovement(
+                material_id=item.material_id,
+                quantity=item.cantidad,
+                type="IN",
+                reason=f"NC {c.punto_venta:05d}-{c.numero:08d}",
+            )
+            db.add(movement)
+
+    c.stock_reversed = True
 
 
 # ---------------------------------------------------------------------------
@@ -229,13 +272,32 @@ def emitir_comprobante(id: int, db: Session = Depends(get_db)):
         if not wsfe:
             raise HTTPException(500, detail="No se pudo inicializar cliente WSFE")
 
+        # -- FECompUltimoAutorizado: resolver número real de ARCA --
+        pv = c.punto_venta
+        tipo_afip = c.tipo_afip or 6
+        ultimo_result = wsfe.get_ultimo_autorizado(pv, tipo_afip)
+
+        if ultimo_result.get("success"):
+            arca_numero = ultimo_result["ultimo_numero"] + 1
+            logger.info(
+                f"FECompUltimoAutorizado OK: último={ultimo_result['ultimo_numero']} "
+                f"→ usando número {arca_numero} para PV={pv} Tipo={tipo_afip}"
+            )
+            c.numero = arca_numero
+        else:
+            logger.warning(
+                f"FECompUltimoAutorizado falló — "
+                f"usando número local {c.numero} como fallback. "
+                f"Error: {ultimo_result.get('error', 'desconocido')}"
+            )
+
         # Preparar datos para WSFE
         cliente_cuit = c.cliente.tax_id.replace("-", "") if c.cliente and c.cliente.tax_id else "0"
         doc_tipo, doc_nro = get_client_tipo_doc(cliente_cuit)
 
         invoice_data = {
-            "punto_venta": c.punto_venta,
-            "tipo_comprobante": c.tipo_afip or 6,
+            "punto_venta": pv,
+            "tipo_comprobante": tipo_afip,
             "cliente_cuit": doc_nro,
             "cliente_tipo_doc": doc_tipo,
             "cbte_desde": c.numero,
@@ -260,6 +322,10 @@ def emitir_comprobante(id: int, db: Session = Depends(get_db)):
                 c.cae_vto = None
         c.afip_response = json.dumps(cae_result)
         c.estado = "issued"
+
+        # Reverse stock for Nota de Crédito (runs in same transaction)
+        if c.tipo in NC_TIPOS:
+            _reverse_stock(db, c)
     else:
         c.afip_response = json.dumps(cae_result)
         c.estado = "error"
@@ -363,6 +429,7 @@ def create_comprobante(data: schemas.ComprobanteCreate, db: Session = Depends(ge
 
         items_data.append(models.ComprobanteItem(
             product_id=item_data.product_id,
+            material_id=item_data.material_id,
             descripcion=item_data.descripcion,
             cantidad=item_data.cantidad,
             unidad_medida=item_data.unidad_medida,
@@ -598,6 +665,7 @@ def update_comprobante(id: int, data: schemas.ComprobanteUpdate, db: Session = D
             new_item = models.ComprobanteItem(
                 comprobante_id=c.id,
                 product_id=item_data.product_id,
+                material_id=item_data.material_id,
                 descripcion=item_data.descripcion,
                 cantidad=item_data.cantidad,
                 unidad_medida=item_data.unidad_medida,
