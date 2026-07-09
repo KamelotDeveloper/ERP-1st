@@ -925,6 +925,415 @@ class WSFEClient:
             }
 
     # ------------------------------------------------------------------
+    # FECompConsultar
+    # ------------------------------------------------------------------
+    def _build_fecompconsultar_request(
+        self, auth: Dict[str, Any], cbte_tipo: int, cbte_nro: int,
+        pto_vta: int
+    ) -> str:
+        """Construye el SOAP envelope para FECompConsultar.
+
+        Args:
+            auth: Dict con Token, Sign del WSAA.
+            cbte_tipo: Código de tipo de comprobante AFIP.
+            cbte_nro: Número de comprobante a consultar.
+            pto_vta: Número de punto de venta.
+
+        Returns:
+            String XML del SOAP envelope listo para POST.
+        """
+        token = self._xml_esc(auth.get("token", ""))
+        sign = self._xml_esc(auth.get("sign", ""))
+        cuit = self._xml_esc(self.wsaa_client.CUIT)
+
+        soap = f'''<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+               xmlns:ns1="http://ar.gov.afip.dif.FEV1/">
+    <soap:Header/>
+    <soap:Body>
+        <ns1:FECompConsultar>
+            <ns1:Auth>
+                <ns1:Token>{token}</ns1:Token>
+                <ns1:Sign>{sign}</ns1:Sign>
+                <ns1:Cuit>{cuit}</ns1:Cuit>
+            </ns1:Auth>
+            <ns1:FeCompConsReq>
+                <ns1:CbteTipo>{cbte_tipo}</ns1:CbteTipo>
+                <ns1:CbteNro>{cbte_nro}</ns1:CbteNro>
+                <ns1:PtoVta>{pto_vta}</ns1:PtoVta>
+            </ns1:FeCompConsReq>
+        </ns1:FECompConsultar>
+    </soap:Body>
+</soap:Envelope>'''
+        return soap
+
+    def _parse_fecompconsultar_response(
+        self, response_xml: str
+    ) -> Dict[str, Any]:
+        """Parsea la respuesta XML de FECompConsultar.
+
+        Extrae campos individuales de FeCompConsResponse:
+        Resultado, CodAutorizacion, EmisionTipo, FchComprobante,
+        FchVencimientoCAE, PtoVta, CbteTipo, CbteNro, ImpTotal, etc.
+
+        Args:
+            response_xml: Respuesta XML cruda de ARCA.
+
+        Returns:
+            {"success": True, "data": {...}} en éxito.
+            {"success": False, "error": str, "errores": [...]} en fallo.
+        """
+        NS_FEV1 = "http://ar.gov.afip.dif.FEV1/"
+
+        try:
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(response_xml)
+
+            # --- SOAP Fault ---
+            fault_elem = root.find(
+                './/{http://schemas.xmlsoap.org/soap/envelope/}Fault'
+            )
+            if fault_elem is not None:
+                fault_string = fault_elem.find('faultstring')
+                fault_code = fault_elem.find('faultcode')
+                return {
+                    "success": False,
+                    "error": (
+                        f"SOAP Fault: "
+                        f"{fault_string.text if fault_string is not None else 'Unknown'}"
+                    ),
+                    "errores": [{
+                        "code": fault_code.text if fault_code is not None else "SOAP",
+                        "msg": fault_string.text if fault_string is not None else "Error SOAP",
+                    }],
+                }
+
+            # --- Errores de negocio ---
+            errores = []
+            for err in root.findall(f'.//{{{NS_FEV1}}}Err'):
+                code_el = err.find(f'{{{NS_FEV1}}}Code')
+                msg_el = err.find(f'{{{NS_FEV1}}}Msg')
+                if code_el is not None or msg_el is not None:
+                    errores.append({
+                        "code": code_el.text if code_el is not None else "0",
+                        "msg": msg_el.text if msg_el is not None else "Error desconocido",
+                    })
+
+            # Fallback sin namespace
+            if not errores:
+                for err in root.findall('.//Err'):
+                    code_el = err.find('Code')
+                    msg_el = err.find('Msg')
+                    if code_el is not None or msg_el is not None:
+                        errores.append({
+                            "code": code_el.text if code_el is not None else "0",
+                            "msg": msg_el.text if msg_el is not None else "Error desconocido",
+                        })
+
+            # --- Parse individual fields from ResultGet ---
+            fields_to_extract = [
+                "Resultado", "CodAutorizacion", "EmisionTipo",
+                "FchComprobante", "FchVencimientoCAE",
+                "PtoVta", "CbteTipo", "CbteNro",
+            ]
+
+            data = {}
+            for field in fields_to_extract:
+                elem = root.find(f'.//{{{NS_FEV1}}}{field}')
+                if elem is None:
+                    elem = root.find(f'.//{field}')
+                if elem is not None and elem.text is not None:
+                    data[_lowercase_first(field)] = elem.text
+
+            if errores:
+                return {
+                    "success": False,
+                    "error": f"ARCA error: {errores[0]['code']} — {errores[0]['msg']}",
+                    "errores": errores,
+                    "data": data if data else None,
+                }
+
+            resultado = data.get("resultado")
+            if resultado:
+                return {"success": True, "data": data}
+
+            return {
+                "success": False,
+                "error": (
+                    "No se encontró Resultado en la respuesta "
+                    "de FECompConsultar"
+                ),
+            }
+
+        except ET.ParseError as e:
+            return {
+                "success": False,
+                "error": f"Error parseando XML respuesta FECompConsultar: {str(e)}",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Error parseando FECompConsultar: {str(e)}",
+            }
+
+    def consultar_comprobante(
+        self, cbte_tipo: int, cbte_nro: int, pto_vta: int,
+        retry: bool = True
+    ) -> Dict[str, Any]:
+        """FECompConsultar — consulta un comprobante existente ante ARCA.
+
+        Útil cuando FECAESolicitar da timeout y se necesita verificar
+        si el CAE fue emitido realmente.
+
+        Args:
+            cbte_tipo: Código AFIP de tipo de comprobante (ej: 6).
+            cbte_nro: Número de comprobante a consultar.
+            pto_vta: Número de punto de venta.
+            retry: Si debe reintentar al fallar por autenticación (default True).
+
+        Returns:
+            {"success": True, "data": {...}} en éxito.
+            {"success": False, "error": str, ...} en fallo.
+        """
+        auth = self.wsaa_client.get_valid_token()
+
+        if not auth or not auth.get("success"):
+            return {
+                "success": False,
+                "error": "No se pudo obtener token de autenticación",
+                "details": auth,
+            }
+
+        try:
+            wsfe_url = self.wsaa_client.get_wsfe_url()
+            logger.info(
+                f"FECompConsultar — PV={pto_vta} Tipo={cbte_tipo} "
+                f"Nro={cbte_nro} → {wsfe_url}"
+            )
+
+            soap_body = self._build_fecompconsultar_request(
+                auth, cbte_tipo, cbte_nro, pto_vta
+            )
+
+            headers = {
+                'Content-Type': 'text/xml; charset=utf-8',
+                'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FECompConsultar',
+            }
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    wsfe_url, content=soap_body, headers=headers
+                )
+
+            result = self._parse_fecompconsultar_response(response.text)
+
+            # Auto-retry on auth errors
+            if retry and not result.get("success"):
+                should_retry = False
+                errores = result.get("errores", [])
+                for err in errores:
+                    code = str(err.get("code", ""))
+                    if code in (
+                        "600", "601", "602", "603", "604", "605",
+                        "606", "607", "608", "609", "10001",
+                    ):
+                        should_retry = True
+                        break
+
+                if should_retry:
+                    logger.info(
+                        "Token expirado en FECompConsultar — "
+                        "renovando y reintentando..."
+                    )
+                    renewed = self.wsaa_client.request_token()
+                    if renewed.get("success"):
+                        soap_body_retry = self._build_fecompconsultar_request(
+                            renewed, cbte_tipo, cbte_nro, pto_vta
+                        )
+                        with httpx.Client(timeout=30.0) as client:
+                            response = client.post(
+                                wsfe_url,
+                                content=soap_body_retry,
+                                headers=headers,
+                            )
+                        result = self._parse_fecompconsultar_response(
+                            response.text
+                        )
+                        logger.info(
+                            f"Reintento FECompConsultar: "
+                            f"{'OK' if result.get('success') else 'Falló'}"
+                        )
+
+            return result
+
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout en FECompConsultar: {str(e)}")
+            return {
+                "success": False,
+                "error": (
+                    "Timeout de conexión con ARCA — "
+                    "FECompConsultar no disponible"
+                ),
+            }
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"Error HTTP en FECompConsultar: "
+                f"{e.response.status_code} — {e.response.text[:300]}"
+            )
+            return {
+                "success": False,
+                "error": f"Error HTTP {e.response.status_code} en FECompConsultar",
+            }
+        except Exception as e:
+            logger.error(
+                f"Error en FECompConsultar: {str(e)}", exc_info=True
+            )
+            return {
+                "success": False,
+                "error": f"Error FECompConsultar: {str(e)}",
+            }
+
+    # ------------------------------------------------------------------
+    # FEDummy — no authentication required
+    # ------------------------------------------------------------------
+    def _build_dummy_request(self) -> str:
+        """Construye el SOAP envelope para FEDummy.
+
+        FEDummy no requiere autenticación — no incluye bloque Auth.
+
+        Returns:
+            String XML del SOAP envelope listo para POST.
+        """
+        soap = '''<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+               xmlns:ns1="http://ar.gov.afip.dif.FEV1/">
+    <soap:Header/>
+    <soap:Body>
+        <ns1:FEDummy/>
+    </soap:Body>
+</soap:Envelope>'''
+        return soap
+
+    def _parse_dummy_response(self, response_xml: str) -> Dict[str, Any]:
+        """Parsea la respuesta XML de FEDummy.
+
+        Extrae AppServerStatus, DbServerStatus, AuthServerStatus.
+        No se usa namespace porque FEDummy response a menudo omite xmlns.
+
+        Args:
+            response_xml: Respuesta XML cruda de ARCA.
+
+        Returns:
+            {"success": True, "data": {"app_server": "OK", ...}} en éxito.
+            {"success": False, "error": str} en fallo.
+        """
+        try:
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(response_xml)
+
+            # --- SOAP Fault ---
+            fault_elem = root.find(
+                './/{http://schemas.xmlsoap.org/soap/envelope/}Fault'
+            )
+            if fault_elem is not None:
+                fault_string = fault_elem.find('faultstring')
+                return {
+                    "success": False,
+                    "error": (
+                        f"SOAP Fault: "
+                        f"{fault_string.text if fault_string is not None else 'Unknown'}"
+                    ),
+                }
+
+            # Parse server status fields with namespace fallback
+            NS_FEV1 = "http://ar.gov.afip.dif.FEV1/"
+            field_map = {
+                "AppServerStatus": "app_server",
+                "DbServerStatus": "db_server",
+                "AuthServerStatus": "auth_server",
+            }
+
+            data = {}
+            for xml_field, data_key in field_map.items():
+                elem = root.find(f'.//{{{NS_FEV1}}}{xml_field}')
+                if elem is None:
+                    elem = root.find(f'.//{xml_field}')
+                if elem is not None:
+                    data[data_key] = elem.text or ""
+
+            if data:
+                return {"success": True, "data": data}
+
+            return {
+                "success": False,
+                "error": (
+                    "No se encontraron datos de estado "
+                    "en respuesta FEDummy"
+                ),
+            }
+
+        except ET.ParseError as e:
+            return {
+                "success": False,
+                "error": f"Error parseando XML respuesta FEDummy: {str(e)}",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Error parseando FEDummy: {str(e)}",
+            }
+
+    def dummy(self) -> Dict[str, Any]:
+        """FEDummy — prueba de conectividad con ARCA.
+
+        No requiere token de autenticación. Verifica el estado de
+        los servidores App, DB y Auth de ARCA.
+
+        Returns:
+            {"success": True, "data": {"app_server": "OK", ...}} en éxito.
+            {"success": False, "error": str} en fallo.
+        """
+        try:
+            wsfe_url = self.wsaa_client.get_wsfe_url()
+            logger.info(f"FEDummy → {wsfe_url}")
+
+            soap_body = self._build_dummy_request()
+
+            headers = {
+                'Content-Type': 'text/xml; charset=utf-8',
+                'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FEDummy',
+            }
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    wsfe_url, content=soap_body, headers=headers
+                )
+
+            return self._parse_dummy_response(response.text)
+
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout en FEDummy: {str(e)}")
+            return {
+                "success": False,
+                "error": "Timeout de conexión con ARCA — FEDummy no disponible",
+            }
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"Error HTTP en FEDummy: "
+                f"{e.response.status_code} — {e.response.text[:300]}"
+            )
+            return {
+                "success": False,
+                "error": f"Error HTTP {e.response.status_code} en FEDummy",
+            }
+        except Exception as e:
+            logger.error(f"Error en FEDummy: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": f"Error FEDummy: {str(e)}",
+            }
+
+    # ------------------------------------------------------------------
     # FEParamGet* — Reference data from ARCA
     # ------------------------------------------------------------------
     def _build_feparamget_request(self, auth: Dict[str, Any], verb: str) -> str:
