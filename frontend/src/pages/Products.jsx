@@ -1,8 +1,18 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import ImportModal from "../components/ImportModal";
+
+const IMPORT_COLUMNS = [
+  { key: "sku", label: "SKU", required: false },
+  { key: "name", label: "Nombre", required: true },
+  { key: "price", label: "Precio", required: true },
+  { key: "stock", label: "Stock", required: true },
+  { key: "stock_minimo", label: "Stock Mínimo", required: false },
+];
 
 export default function Products() {
   const [data, setData] = useState([]);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState({ sku: "", name: "", price: "", stock: "", stock_minimo: "" });
   const [editId, setEditId] = useState(null);
   const [error, setError] = useState("");
@@ -165,6 +175,13 @@ export default function Products() {
           <button className="btn btn-save" onClick={save}>
             {editId ? "Actualizar" : "Crear"}
           </button>
+          <button
+            className="btn"
+            onClick={() => setShowImport(true)}
+            style={{ marginLeft: "5px" }}
+          >
+            Importar
+          </button>
           {editId && (
             <button
               className="btn"
@@ -179,6 +196,15 @@ export default function Products() {
           )}
         </div>
       </div>
+
+      {showImport && (
+        <ImportModal
+          resource="products"
+          columns={IMPORT_COLUMNS}
+          onImportComplete={() => loadData(currentPage)}
+          onClose={() => setShowImport(false)}
+        />
+      )}
 
       {loading && <div style={{ textAlign: "center", padding: "10px" }}>Cargando...</div>}
 
