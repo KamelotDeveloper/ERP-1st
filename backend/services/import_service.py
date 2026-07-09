@@ -6,12 +6,13 @@ import csv
 import io
 import os
 import re
+from datetime import datetime
 from typing import List, Dict, Tuple
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from pydantic import ValidationError
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
 import models
@@ -444,3 +445,105 @@ def validate_rows(rows: List[Dict], resource: str, db: Session) -> Dict:
         "columns_mapped": column_map,
         "columns_ignored": ignored_columns,
     }
+
+
+# ---------------------------------------------------------------------------
+# Import
+# ---------------------------------------------------------------------------
+
+def import_rows(valid_rows: List[Dict], resource: str, db: Session) -> Dict:
+    """Bulk import rows in a single transaction with per-row savepoints.
+
+    Side effects:
+        - materials: creates ``MaterialMovement`` IN if ``current_stock > 0``.
+        - products: sets ``version=1`` and ``updated_at``.
+
+    Returns::
+
+        {
+            "imported": N,
+            "failed": N,
+            "errors": [{"row": idx, "field": "...", "message": "..."}],
+            "results": [{"row": idx, "status": "imported"|"error", "id": N}],
+        }
+    """
+    imported = 0
+    errors = []
+    results = []
+
+    for entry in valid_rows:
+        data = entry["data"].copy()
+        row_idx = entry["row"]
+
+        try:
+            with db.begin_nested():
+                if resource == "materials":
+                    stock = data.pop("current_stock", 0)
+                    obj = models.Material(**data)
+                    db.add(obj)
+                    db.flush()
+                    if stock > 0:
+                        movement = models.MaterialMovement(
+                            material_id=obj.id,
+                            quantity=stock,
+                            type="IN",
+                        )
+                        db.add(movement)
+                    obj_id = obj.id
+                elif resource == "products":
+                    data.setdefault("version", 1)
+                    data["updated_at"] = datetime.utcnow()
+                    obj = models.Product(**data)
+                    db.add(obj)
+                    db.flush()
+                    obj_id = obj.id
+                else:  # clients
+                    obj = models.Client(**data)
+                    db.add(obj)
+                    db.flush()
+                    obj_id = obj.id
+
+            imported += 1
+            results.append({"row": row_idx, "status": "imported", "id": obj_id})
+
+        except Exception as e:
+            err_msg = str(e)
+            if "UNIQUE constraint" in err_msg and "sku" in err_msg.lower():
+                err_msg = f"El SKU '{data.get('sku', '')}' ya existe en la base de datos"
+            errors.append({"row": row_idx, "field": "database", "message": err_msg})
+            results.append({"row": row_idx, "status": "error", "error": err_msg})
+
+    if imported > 0:
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            return {
+                "imported": 0,
+                "failed": len(valid_rows),
+                "errors": [{"row": -1, "field": "database", "message": f"Error al confirmar la transaccion: {str(e)}"}],
+                "results": [r for r in results if r["status"] != "imported"],
+            }
+
+    return {
+        "imported": imported,
+        "failed": len(errors),
+        "errors": errors,
+        "results": results,
+    }
+
+
+def generate_template(resource: str) -> bytes:
+    """Generate an .xlsx template with headers for the given resource.
+
+    Returns raw bytes of the workbook.
+    """
+    headers = TEMPLATE_HEADERS[resource]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = resource
+    ws.append(headers)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
