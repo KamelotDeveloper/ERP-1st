@@ -9,9 +9,12 @@ import re
 from typing import List, Dict, Tuple
 
 from fastapi import HTTPException, UploadFile
+from sqlalchemy.orm import Session
+from pydantic import ValidationError
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
+import models
 import schemas
 
 
@@ -297,3 +300,147 @@ def parse_file(file: UploadFile) -> Tuple[List[Dict], List[str]]:
         data_rows = data_rows[:MAX_ROWS_PARSE]
 
     return data_rows, warnings
+
+
+# ---------------------------------------------------------------------------
+# Error formatting
+# ---------------------------------------------------------------------------
+
+FIELD_LABELS = {
+    "name": "nombre",
+    "email": "email",
+    "phone": "telefono",
+    "address": "direccion",
+    "tax_id": "CUIT",
+    "condicion_iva_receptor_id": "condicion IVA",
+    "sku": "SKU",
+    "price": "precio",
+    "stock": "stock",
+    "stock_minimo": "stock minimo",
+    "category": "categoria",
+    "current_stock": "stock actual",
+    "unit_cost": "costo unitario",
+    "unit_price": "precio unitario",
+}
+
+
+def field_label(field: str) -> str:
+    """Map a field name to its Spanish label."""
+    return FIELD_LABELS.get(field, field)
+
+
+def format_pydantic_error(error: Dict, value) -> str:
+    """Format a Pydantic ValidationError item into a Spanish error message."""
+    loc = error.get("loc", [])
+    field = str(loc[0]) if loc else "campo"
+    etype = error.get("type", "")
+
+    if etype == "missing":
+        return f"El campo '{field_label(field)}' es obligatorio"
+    if etype in ("string_too_short",):
+        return f"El campo '{field_label(field)}' es obligatorio"
+    if etype in ("string_too_long",):
+        return f"El campo '{field_label(field)}' es demasiado largo"
+    if etype == "value_error":
+        return f"El valor '{value}' no es valido para '{field_label(field)}'"
+    if "float_parsing" in etype or ("float" in etype and "type" in etype):
+        return f"El campo '{field_label(field)}' debe ser un numero"
+    if "int_parsing" in etype or "int_from_float" in etype:
+        return f"El campo '{field_label(field)}' debe ser un numero entero"
+    if etype in ("greater_than_equal", "less_than_equal"):
+        ctx_val = error.get("ctx", {}) or {}
+        if "ge" in ctx_val:
+            return f"El campo '{field_label(field)}' debe ser mayor o igual a {ctx_val['ge']}"
+        if "le" in ctx_val:
+            return f"El campo '{field_label(field)}' debe ser menor o igual a {ctx_val['le']}"
+        return f"El campo '{field_label(field)}' no cumple con la validacion numerica"
+    if etype == "string_pattern_mismatch":
+        if field == "tax_id":
+            return f"El CUIT '{value}' no tiene un formato valido (use XX-XXXXXXXX-X)"
+        return f"El campo '{field_label(field)}' no tiene un formato valido"
+    if etype == "email":
+        return f"El email '{value}' no tiene un formato valido"
+
+    # Fallback
+    return f"Error en campo '{field_label(field)}': {error.get('msg', 'valor invalido')}"
+
+
+# ---------------------------------------------------------------------------
+# Validation
+# ---------------------------------------------------------------------------
+
+def validate_rows(rows: List[Dict], resource: str, db: Session) -> Dict:
+    """Validate parsed rows against Pydantic schema.
+
+    Returns::
+
+        {
+            "valid_rows": [{"row": idx, "data": {field: value}}],
+            "error_rows": [{"row": idx, "data": {field: value}, "errors": {field: msg}}],
+            "columns_mapped": {original_header: field_name},
+            "columns_ignored": [original_header],
+        }
+    """
+    schema_class = SCHEMA_MAP[resource]
+
+    # Build column mapping from first row
+    headers = list(rows[0].keys()) if rows else []
+    column_map, ignored_columns = _build_column_mapping(headers, resource)
+
+    valid_rows = []
+    error_rows = []
+    seen_skus: set = set()
+
+    # Gather existing SKUs from DB for products / materials
+    existing_skus: set = set()
+    if resource == "products":
+        existing = db.query(models.Product.sku).filter(models.Product.sku.isnot(None)).all()
+        existing_skus = {s[0] for s in existing if s[0]}
+    elif resource == "materials":
+        existing = db.query(models.Material.sku).filter(models.Material.sku.isnot(None)).all()
+        existing_skus = {s[0] for s in existing if s[0]}
+
+    for row_idx, row in enumerate(rows):
+        # Map column names to field names
+        mapped_data: Dict = {}
+        for key, value in row.items():
+            if key in column_map:
+                mapped_data[column_map[key]] = _empty_to_none(value)
+            elif key in VALID_FIELD_NAMES[resource]:
+                mapped_data[key] = _empty_to_none(value)
+
+        field_errors: Dict[str, str] = {}
+
+        # Validate with Pydantic schema
+        try:
+            validated = schema_class(**{k: v for k, v in mapped_data.items() if v is not None})
+            clean_data = validated.model_dump()
+        except ValidationError as e:
+            for err in e.errors():
+                f = str(err["loc"][0]) if err.get("loc") else "unknown"
+                field_errors[f] = format_pydantic_error(err, mapped_data.get(f, ""))
+
+        # SKU uniqueness check
+        if not field_errors and resource in ("products", "materials"):
+            sku = mapped_data.get("sku")
+            if sku is not None:
+                sku_str = str(sku).strip()
+                if sku_str in seen_skus:
+                    field_errors["sku"] = f"El SKU '{sku_str}' esta duplicado en el archivo"
+                elif sku_str in existing_skus:
+                    label = "producto" if resource == "products" else "material"
+                    field_errors["sku"] = f"El SKU '{sku_str}' ya existe en otro {label}"
+                else:
+                    seen_skus.add(sku_str)
+
+        if field_errors:
+            error_rows.append({"row": row_idx, "data": mapped_data, "errors": field_errors})
+        else:
+            valid_rows.append({"row": row_idx, "data": clean_data})
+
+    return {
+        "valid_rows": valid_rows,
+        "error_rows": error_rows,
+        "columns_mapped": column_map,
+        "columns_ignored": ignored_columns,
+    }
