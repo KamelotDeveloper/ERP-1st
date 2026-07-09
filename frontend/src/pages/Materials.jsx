@@ -1,14 +1,27 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import ImportModal from "../components/ImportModal";
+
+const IMPORT_COLUMNS = [
+  { key: "sku", label: "SKU", required: false },
+  { key: "name", label: "Nombre", required: true },
+  { key: "category", label: "Categoría", required: true },
+  { key: "current_stock", label: "Stock Actual", required: true },
+  { key: "unit_cost", label: "Costo Unit.", required: true },
+  { key: "unit_price", label: "Precio Unit.", required: false },
+  { key: "stock_minimo", label: "Stock Mínimo", required: false },
+];
 
 export default function Materials() {
   const [data, setData] = useState([]);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState({
     sku: "",
     name: "",
     category: "",
     current_stock: "",
     unit_cost: "",
+    unit_price: "",
     stock_minimo: "",
   });
   const [editId, setEditId] = useState(null);
@@ -54,6 +67,7 @@ export default function Materials() {
         category: form.category,
         current_stock: parseFloat(form.current_stock) || 0,
         unit_cost: parseFloat(form.unit_cost) || 0,
+        unit_price: parseFloat(form.unit_price) || 0,
         stock_minimo: parseInt(form.stock_minimo) || 0,
       };
 
@@ -63,7 +77,7 @@ export default function Materials() {
         await api.post("/materials", payload);
       }
 
-      setForm({ sku: "", name: "", category: "", current_stock: "", unit_cost: "", stock_minimo: "" });
+      setForm({ sku: "", name: "", category: "", current_stock: "", unit_cost: "", unit_price: "", stock_minimo: "" });
       setEditId(null);
       loadData(currentPage);
     } catch (err) {
@@ -96,6 +110,7 @@ export default function Materials() {
       category: m.category || "",
       current_stock: String(m.current_stock || ""),
       unit_cost: String(m.unit_cost || ""),
+      unit_price: String(m.unit_price || ""),
       stock_minimo: String(m.stock_minimo || ""),
     });
     setEditId(m.id);
@@ -186,6 +201,17 @@ export default function Materials() {
         </div>
 
         <div className="form-group">
+          <label>Precio al público ($):</label>
+          <input
+            type="number"
+            step="0.01"
+            value={form.unit_price}
+            onChange={(e) => setForm({ ...form, unit_price: e.target.value })}
+            placeholder="0.00 (opcional)"
+          />
+        </div>
+
+        <div className="form-group">
           <label>Stock mín:</label>
           <input
             type="number"
@@ -200,12 +226,19 @@ export default function Materials() {
           <button className="btn btn-save" onClick={save}>
             {editId ? "Actualizar" : "Crear"}
           </button>
+          <button
+            className="btn"
+            onClick={() => setShowImport(true)}
+            style={{ marginLeft: "5px" }}
+          >
+            Importar
+          </button>
           {editId && (
             <button
               className="btn"
               onClick={() => {
                 setEditId(null);
-                setForm({ sku: "", name: "", category: "", current_stock: "", unit_cost: "", stock_minimo: "" });
+        setForm({ sku: "", name: "", category: "", current_stock: "", unit_cost: "", unit_price: "", stock_minimo: "" });
               }}
               style={{ marginLeft: "5px" }}
             >
@@ -214,6 +247,15 @@ export default function Materials() {
           )}
         </div>
       </div>
+
+      {showImport && (
+        <ImportModal
+          resource="materials"
+          columns={IMPORT_COLUMNS}
+          onImportComplete={() => loadData(currentPage)}
+          onClose={() => setShowImport(false)}
+        />
+      )}
 
       {loading && <div style={{ textAlign: "center", padding: "10px" }}>Cargando...</div>}
 
@@ -236,6 +278,7 @@ export default function Materials() {
                 <th>Stock</th>
                 <th>Stock mín</th>
                 <th>Costo unit.</th>
+                <th>Precio público</th>
                 <th>Total</th>
                 <th>Acciones</th>
               </tr>
@@ -250,6 +293,7 @@ export default function Materials() {
                   <td>{i.current_stock}</td>
                   <td>{i.stock_minimo || 0}</td>
                   <td>${i.unit_cost}</td>
+                  <td>${i.unit_price || 0}</td>
                   <td>${((i.current_stock || 0) * (i.unit_cost || 0)).toFixed(2)}</td>
                   <td>
                     <div className="action-buttons">
