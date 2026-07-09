@@ -329,11 +329,31 @@ class WSAAClient:
         return self.request_token()
 
 
+# Entry tag mapping: FEParamGet verb → ResultGet child element tag
+ENTRY_MAP: dict[str, str] = {
+    "FEParamGetTiposCbte": "TipoCbte",
+    "FEParamGetPtosVenta": "PtoVenta",
+    "FEParamGetTiposIva": "IvaTipo",
+    "FEParamGetTiposDoc": "DocTipo",
+    "FEParamGetTiposMonedas": "Moneda",
+    "FEParamGetTiposTributos": "Tributo",
+    "FEParamGetCondicionesIVAReceptor": "CondicionIVAReceptorId",
+}
+
+
+def _lowercase_first(s: str) -> str:
+    """Lowercase the first character of a string."""
+    if not s:
+        return s
+    return s[0].lower() + s[1:]
+
+
 class WSFEClient:
     """Cliente para WSFE (Facturación Electrónica) de ARCA/AFIP"""
     
     def __init__(self, wsaa_client: WSAAClient):
         self.wsaa_client = wsaa_client
+        self._feparamget_cache: dict[str, dict] = {}
     
     def _build_fe_cae_request(self, invoice_data: Dict[str, Any]) -> Dict[str, Any]:
         """Construye el request para FECAESolicitar según WSDL de ARCA.
@@ -903,6 +923,301 @@ class WSFEClient:
                 "success": False,
                 "error": f"Error FECompUltimoAutorizado: {str(e)}",
             }
+
+    # ------------------------------------------------------------------
+    # FEParamGet* — Reference data from ARCA
+    # ------------------------------------------------------------------
+    def _build_feparamget_request(self, auth: Dict[str, Any], verb: str) -> str:
+        """Builds SOAP envelope with <ns1:{verb}><ns1:Auth>...</ns1:Auth></ns1:{verb}>.
+
+        All FEParamGet* verbs share this shape — only the verb name changes.
+
+        Args:
+            auth: Dict with Token, Sign from WSAA.
+            verb: WSDL verb name (e.g. 'FEParamGetTiposCbte').
+
+        Returns:
+            String XML of the SOAP envelope.
+        """
+        token = self._xml_esc(auth.get("token", ""))
+        sign = self._xml_esc(auth.get("sign", ""))
+        cuit = self._xml_esc(self.wsaa_client.CUIT)
+
+        return f'''<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+               xmlns:ns1="http://ar.gov.afip.dif.FEV1/">
+  <soap:Header/>
+  <soap:Body>
+    <ns1:{verb}>
+      <ns1:Auth>
+        <ns1:Token>{token}</ns1:Token>
+        <ns1:Sign>{sign}</ns1:Sign>
+        <ns1:Cuit>{cuit}</ns1:Cuit>
+      </ns1:Auth>
+    </ns1:{verb}>
+  </soap:Body>
+</soap:Envelope>'''
+
+    def _parse_feparamget_response(
+        self, response_xml: str, entry_tag: str
+    ) -> Dict[str, Any]:
+        """Parses ResultGet/entry_tag entries from a FEParamGet* response.
+
+        Normalizes XML field names to lowercase-first-camelCase keys
+        (e.g. FchDesde → fchDesde). Preserves all fields as raw strings.
+
+        Args:
+            response_xml: Raw XML response from ARCA.
+            entry_tag: Child element name inside ResultGet (e.g. 'TipoCbte').
+
+        Returns:
+            {"success": True, "data": [{"id": "...", "desc": "...", ...}, ...]}
+            or {"success": False, "error": "...", "errores": [...]} on failure.
+        """
+        NS_FEV1 = "http://ar.gov.afip.dif.FEV1/"
+
+        try:
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(response_xml)
+
+            # --- SOAP Fault ---
+            fault_elem = root.find(
+                './/{http://schemas.xmlsoap.org/soap/envelope/}Fault'
+            )
+            if fault_elem is not None:
+                fault_string = fault_elem.find('faultstring')
+                fault_code = fault_elem.find('faultcode')
+                return {
+                    "success": False,
+                    "error": (
+                        f"SOAP Fault: {fault_string.text if fault_string is not None else 'Unknown'}"
+                    ),
+                    "errores": [{
+                        "code": fault_code.text if fault_code is not None else "SOAP",
+                        "msg": fault_string.text if fault_string is not None else "Error SOAP",
+                    }],
+                }
+
+            # --- Errores de negocio (ARCA error block) ---
+            errores = []
+            for err in root.findall(f'.//{{{NS_FEV1}}}Err'):
+                code_el = err.find(f'{{{NS_FEV1}}}Code')
+                msg_el = err.find(f'{{{NS_FEV1}}}Msg')
+                if code_el is not None or msg_el is not None:
+                    errores.append({
+                        "code": code_el.text if code_el is not None else "0",
+                        "msg": msg_el.text if msg_el is not None else "Error desconocido",
+                    })
+
+            # Fallback: buscar Errores sin namespace
+            if not errores:
+                for err in root.findall('.//Err'):
+                    code_el = err.find('Code')
+                    msg_el = err.find('Msg')
+                    if code_el is not None or msg_el is not None:
+                        errores.append({
+                            "code": code_el.text if code_el is not None else "0",
+                            "msg": msg_el.text if msg_el is not None else "Error desconocido",
+                        })
+
+            if errores:
+                return {
+                    "success": False,
+                    "error": f"ARCA error: {errores[0]['code']} — {errores[0]['msg']}",
+                    "errores": errores,
+                }
+
+            # --- Parse entries ---
+            results = []
+            for entry in root.findall(f'.//{{{NS_FEV1}}}{entry_tag}'):
+                item = {}
+                for child in entry:
+                    key = _lowercase_first(child.tag.split('}')[-1])
+                    item[key] = child.text or ""
+                results.append(item)
+
+            return {"success": True, "data": results}
+
+        except ET.ParseError as e:
+            return {
+                "success": False,
+                "error": f"Error parseando XML respuesta FEParamGet: {str(e)}",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Error parseando FEParamGet: {str(e)}",
+            }
+
+    def _call_feparamget(
+        self, verb: str, entry_tag: str, retry: bool = True
+    ) -> Dict[str, Any]:
+        """Orchestrator for FEParamGet* calls with cache + auto-retry.
+
+        1. Gets valid WSAA token
+        2. Checks in-memory cache (returns cached data if fresh)
+        3. Builds SOAP → POST → parses response
+        4. Auto-retries on auth error codes (600-609, 10001)
+        5. Caches successful result with 1-hour TTL
+
+        Args:
+            verb: WSDL verb name (e.g. 'FEParamGetTiposCbte').
+            entry_tag: Child element name inside ResultGet.
+            retry: Whether to retry on auth error (default True).
+
+        Returns:
+            Success: {"success": True, "data": [...]}
+            Cache hit: {"success": True, "data": [...], "cached": True}
+            Failure: {"success": False, "error": "..."}
+        """
+        # --- Check cache ---
+        cached = self._feparamget_cache.get(verb)
+        if cached and datetime.now(timezone.utc) < cached["expires_at"]:
+            return {"success": True, "data": cached["data"], "cached": True}
+
+        # --- Get token ---
+        auth = self.wsaa_client.get_valid_token()
+        if not auth or not auth.get("success"):
+            return {
+                "success": False,
+                "error": "No se pudo obtener token de autenticación",
+                "details": auth,
+            }
+
+        try:
+            wsfe_url = self.wsaa_client.get_wsfe_url()
+            logger.info(f"FEParamGet — {verb} → {wsfe_url}")
+
+            soap_body = self._build_feparamget_request(auth, verb)
+
+            headers = {
+                'Content-Type': 'text/xml; charset=utf-8',
+                'SOAPAction': f'http://ar.gov.afip.dif.FEV1/{verb}',
+            }
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    wsfe_url, content=soap_body, headers=headers
+                )
+
+            result = self._parse_feparamget_response(response.text, entry_tag)
+
+            # --- Auto-retry on auth errors ---
+            if retry and not result.get("success"):
+                should_retry = False
+                errores = result.get("errores", [])
+                for err in errores:
+                    code = str(err.get("code", ""))
+                    if code in (
+                        "600", "601", "602", "603", "604", "605",
+                        "606", "607", "608", "609", "10001",
+                    ):
+                        should_retry = True
+                        break
+
+                if should_retry:
+                    logger.info(
+                        f"Token expirado en {verb} — renovando y reintentando..."
+                    )
+                    renewed = self.wsaa_client.request_token()
+                    if renewed.get("success"):
+                        soap_body_retry = self._build_feparamget_request(
+                            renewed, verb
+                        )
+                        with httpx.Client(timeout=30.0) as client:
+                            response = client.post(
+                                wsfe_url,
+                                content=soap_body_retry,
+                                headers=headers,
+                            )
+                        result = self._parse_feparamget_response(
+                            response.text, entry_tag
+                        )
+                        logger.info(
+                            f"Reintento {verb}: "
+                            f"{'OK' if result.get('success') else 'Falló'}"
+                        )
+
+            # --- Cache success ---
+            if result.get("success"):
+                self._feparamget_cache[verb] = {
+                    "data": result["data"],
+                    "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
+                }
+
+            return result
+
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout en {verb}: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Timeout de conexión con ARCA — {verb} no disponible",
+            }
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"Error HTTP en {verb}: "
+                f"{e.response.status_code} — {e.response.text[:300]}"
+            )
+            return {
+                "success": False,
+                "error": f"Error HTTP {e.response.status_code} en {verb}",
+            }
+        except Exception as e:
+            logger.error(f"Error en {verb}: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": f"Error {verb}: {str(e)}",
+            }
+
+    # --- Public FEParamGet methods ---
+
+    def get_tipos_cbte(self, retry: bool = True) -> Dict[str, Any]:
+        """FEParamGetTiposCbte — tipos de comprobante (Factura A, B, NC, ND, etc.)."""
+        return self._call_feparamget(
+            "FEParamGetTiposCbte", ENTRY_MAP["FEParamGetTiposCbte"], retry=retry
+        )
+
+    def get_ptos_venta(self, retry: bool = True) -> Dict[str, Any]:
+        """FEParamGetPtosVenta — puntos de venta habilitados."""
+        return self._call_feparamget(
+            "FEParamGetPtosVenta", ENTRY_MAP["FEParamGetPtosVenta"], retry=retry
+        )
+
+    def get_tipos_iva(self, retry: bool = True) -> Dict[str, Any]:
+        """FEParamGetTiposIva — alícuotas de IVA."""
+        return self._call_feparamget(
+            "FEParamGetTiposIva", ENTRY_MAP["FEParamGetTiposIva"], retry=retry
+        )
+
+    def get_tipos_doc(self, retry: bool = True) -> Dict[str, Any]:
+        """FEParamGetTiposDoc — tipos de documento (CUIT, DNI, etc.)."""
+        return self._call_feparamget(
+            "FEParamGetTiposDoc", ENTRY_MAP["FEParamGetTiposDoc"], retry=retry
+        )
+
+    def get_tipos_monedas(self, retry: bool = True) -> Dict[str, Any]:
+        """FEParamGetTiposMonedas — monedas (PES, DOL, EUR, etc.)."""
+        return self._call_feparamget(
+            "FEParamGetTiposMonedas", ENTRY_MAP["FEParamGetTiposMonedas"], retry=retry
+        )
+
+    def get_tipos_tributos(self, retry: bool = True) -> Dict[str, Any]:
+        """FEParamGetTiposTributos — tributos (IIBB, Otros, etc.)."""
+        return self._call_feparamget(
+            "FEParamGetTiposTributos", ENTRY_MAP["FEParamGetTiposTributos"], retry=retry
+        )
+
+    def get_condiciones_iva_receptor(self, retry: bool = True) -> Dict[str, Any]:
+        """FEParamGetCondicionesIVAReceptor — condiciones IVA del receptor (RG 5616)."""
+        return self._call_feparamget(
+            "FEParamGetCondicionesIVAReceptor",
+            ENTRY_MAP["FEParamGetCondicionesIVAReceptor"],
+            retry=retry,
+        )
+
+    def clear_feparamget_cache(self) -> None:
+        """Clears the in-memory FEParamGet cache, forcing fresh fetches on next call."""
+        self._feparamget_cache.clear()
 
 
 def create_wsaa_client(config: dict) -> Optional[WSAAClient]:
