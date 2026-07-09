@@ -1,5 +1,7 @@
 ﻿import logging
-from fastapi import APIRouter, Depends, HTTPException
+import io
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
@@ -9,6 +11,8 @@ import requests
 from config import settings
 from typing import Optional
 from datetime import datetime
+from pydantic import ValidationError
+from services import import_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -240,6 +244,7 @@ def create_material(
         name=data.name,
         category=data.category,
         unit_cost=data.unit_cost,
+        unit_price=data.unit_price,
         current_stock=data.current_stock or 0,
         stock_minimo=data.stock_minimo or 0
     )
@@ -295,6 +300,7 @@ def list_materials(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)
             "name": m.name,
             "category": m.category,
             "unit_cost": m.unit_cost,
+            "unit_price": m.unit_price,
             "current_stock": stock,
             "stock_minimo": m.stock_minimo,
             "total_value": total_value
@@ -360,6 +366,7 @@ def update_material(
     material.name = data.name
     material.category = data.category
     material.unit_cost = data.unit_cost
+    material.unit_price = data.unit_price
     material.stock_minimo = data.stock_minimo or 0
 
     total_in = db.query(func.sum(models.MaterialMovement.quantity)).filter(
@@ -408,6 +415,121 @@ def delete_material(
     return {"ok": True}
 
 # -------------------------
+# IMPORT (bulk CSV/XLSX)
+# -------------------------
+
+VALID_RESOURCES = {"clients", "products", "materials"}
+
+
+def _validate_resource(resource: str):
+    if resource not in VALID_RESOURCES:
+        raise HTTPException(status_code=400, detail="Recurso no valido. Use clients, products o materials")
+
+
+@router.post("/{resource}/import/preview")
+def import_preview(resource: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Upload a CSV/XLSX file, parse, validate and return preview WITHOUT persisting."""
+    _validate_resource(resource)
+
+    rows, parse_warnings = import_service.parse_file(file)
+
+    # Truncate preview rows for performance
+    total_parsed = len(rows)
+    if total_parsed > import_service.MAX_ROWS_PREVIEW:
+        rows = rows[:import_service.MAX_ROWS_PREVIEW]
+        parse_warnings.append(
+            f"El archivo tiene {total_parsed} filas. Mostrando primeras {import_service.MAX_ROWS_PREVIEW}."
+        )
+
+    result = import_service.validate_rows(rows, resource, db)
+
+    # Build unified rows array sorted by original index
+    preview_rows = []
+    for v in result["valid_rows"]:
+        preview_rows.append({"index": v["row"], "data": v["data"], "errors": {}, "valid": True})
+    for e in result["error_rows"]:
+        preview_rows.append({"index": e["row"], "data": e["data"], "errors": e["errors"], "valid": False})
+    preview_rows.sort(key=lambda x: x["index"])
+
+    return {
+        "columns_mapped": result["columns_mapped"],
+        "columns_ignored": result["columns_ignored"],
+        "rows": preview_rows,
+        "total_rows": total_parsed,
+        "valid_count": len(result["valid_rows"]),
+        "error_count": len(result["error_rows"]),
+        "warnings": parse_warnings,
+    }
+
+
+@router.post("/{resource}/import/execute")
+def import_execute(resource: str, body: dict, db: Session = Depends(get_db)):
+    """Execute import of previously previewed and edited rows."""
+    _validate_resource(resource)
+
+    rows_data = body.get("rows", [])
+    if not rows_data:
+        raise HTTPException(status_code=400, detail="No hay filas para importar")
+
+    schema_class = import_service.SCHEMA_MAP[resource]
+    to_import = []
+    revalidation_errors = []
+
+    for item in rows_data:
+        if item.get("skip", False):
+            continue
+
+        row_idx = item.get("index")
+        row_data = item.get("data", {})
+
+        # Re-validate every row — never trust client data
+        try:
+            validated = schema_class(**{k: v for k, v in row_data.items() if v is not None})
+            to_import.append({"row": row_idx, "data": validated.model_dump()})
+        except ValidationError as e:
+            msgs = []
+            for err in e.errors():
+                f = str(err["loc"][0]) if err.get("loc") else "unknown"
+                msgs.append(import_service.format_pydantic_error(err, row_data.get(f, "")))
+            revalidation_errors.append({
+                "row": row_idx,
+                "field": "revalidation",
+                "message": "; ".join(msgs),
+            })
+
+    if revalidation_errors:
+        return {
+            "imported": 0,
+            "failed": len(revalidation_errors),
+            "errors": revalidation_errors,
+            "results": [
+                {"row": e["row"], "status": "error", "error": e["message"]}
+                for e in revalidation_errors
+            ],
+        }
+
+    if not to_import:
+        raise HTTPException(status_code=400, detail="No hay filas para importar (todas estan marcadas para saltear)")
+
+    result = import_service.import_rows(to_import, resource, db)
+    return result
+
+
+@router.get("/{resource}/import/template")
+def import_template(resource: str):
+    """Download an .xlsx template with the correct headers for the resource."""
+    _validate_resource(resource)
+
+    xlsx_bytes = import_service.generate_template(resource)
+    filename = f"{resource}_template.xlsx"
+
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+# -------------------------
 # SALES
 # -------------------------
 
@@ -424,7 +546,8 @@ def list_sales(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
             "client_id": s.client_id,
             "client_name": client.name if client else "Unknown",
             "total": s.total,
-            "date": s.date.isoformat() if s.date else None
+            "date": s.date.isoformat() if s.date else None,
+            "payment_method": s.payment_method or "efectivo"
         })
 
     return result
@@ -463,7 +586,63 @@ def get_sale(sale_id: int, db: Session = Depends(get_db)):
         "client_name": client.name if client else "Unknown",
         "total": sale.total,
         "date": sale.date.isoformat() if sale.date else None,
+        "payment_method": sale.payment_method or "efectivo",
         "items": items
+    }
+
+
+@router.get("/clients/{client_id}/purchases")
+def get_client_purchases(
+    client_id: int,
+    skip: int = 0,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """Get purchase history for a client with expanded items and pagination"""
+    # Validate client exists
+    client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    # Get total count for pagination
+    total_count = db.query(models.Sale).filter(
+        models.Sale.client_id == client_id
+    ).count()
+
+    # Get sales ordered by date DESC with pagination
+    sales = db.query(models.Sale).filter(
+        models.Sale.client_id == client_id
+    ).order_by(models.Sale.date.desc()).offset(skip).limit(limit).all()
+
+    purchases = []
+    for sale in sales:
+        items = []
+        for item in sale.items:
+            product = db.query(models.Product).filter(
+                models.Product.id == item.product_id
+            ).first()
+            items.append({
+                "id": item.id,
+                "product_name": product.name if product else "Unknown",
+                "quantity": item.quantity,
+                "price": item.price,
+                "subtotal": item.quantity * item.price
+            })
+
+        purchases.append({
+            "sale_id": sale.id,
+            "date": sale.date,
+            "items": items,
+            "total": sale.total,
+            "payment_method": sale.payment_method or "efectivo"
+        })
+
+    page = (skip // limit) + 1 if limit > 0 else 1
+    return {
+        "purchases": purchases,
+        "total_count": total_count,
+        "page": page,
+        "limit": limit
     }
 
 
@@ -519,7 +698,8 @@ def create_sale(
         # Create sale record
         sale = models.Sale(
             client_id=data.client_id,
-            total=total
+            total=total,
+            payment_method=data.payment_method or "efectivo"
         )
         db.add(sale)
         db.flush()  # Get sale ID without committing
@@ -566,6 +746,7 @@ def create_sale(
             "client_name": client.name,
             "total": sale.total,
             "date": sale.date.isoformat() if sale.date else None,
+            "payment_method": sale.payment_method or "efectivo",
             "items": items_data,
             "message": "Sale created successfully"
         }
@@ -703,10 +884,12 @@ def global_search(q: str, db: Session = Depends(get_db)):
 def iniciar_sesion(data: dict, db: Session = Depends(get_db)):
     """
     Verifica licencia en Supabase y maneja trial local.
-    Body: { "client_id": "uuid-from-localStorage" }
+    Body: { "client_id": "uuid-from-localStorage", "crear_trial": true }
+    Si crear_trial=false, solo verifica sin crear trial nuevo.
     """
     try:
         client_id = data.get("client_id")
+        crear_trial = data.get("crear_trial", True)
         
         if not client_id:
             raise HTTPException(status_code=400, detail="client_id requerido")
@@ -770,8 +953,8 @@ def iniciar_sesion(data: dict, db: Session = Depends(get_db)):
                         "error": "trial_expirado",
                         "mensaje": "El periodo de prueba ha finalizado"
                     }
-            else:
-                # No hay trial, crear uno nuevo
+            elif crear_trial:
+                # No hay trial, crear uno nuevo (solo si crear_trial=true)
                 from datetime import datetime, timedelta
                 new_trial = models.LicenseTrial(
                     client_id=client_id,
@@ -785,6 +968,13 @@ def iniciar_sesion(data: dict, db: Session = Depends(get_db)):
                     "tipo": "trial",
                     "dias_restantes": 15,
                     "fecha_fin": (datetime.now() + timedelta(days=15)).isoformat()
+                }
+            else:
+                # Solo consulta, no crear trial
+                return {
+                    "ok": False,
+                    "error": "sin_licencia",
+                    "mensaje": "No hay licencia ni trial activo"
                 }
         
         # 3. Licencia de Supabase encontrada
