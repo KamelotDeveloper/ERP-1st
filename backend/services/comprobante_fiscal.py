@@ -7,6 +7,59 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+def validate_math(
+    imp_total: float,
+    imp_neto: float,
+    imp_tot_conc: float = 0,
+    imp_op_ex: float = 0,
+    imp_iva: float = 0,
+    imp_trib: float = 0,
+    tolerance: float = 0.01,
+) -> dict:
+    """Pre-flight validation: ImpTotal == ImpNeto + ImpTotConc + ImpOpEx + ImpIVA + ImpTrib.
+
+    ARCA error code 10030 rejects comprobantes where the difference between
+    ImpTotal and the sum of its components is >= 0.02. This function catches
+    mismatches early, before calling FECAESolicitar.
+
+    Args:
+        imp_total: Valor de ImpTotal (rounded).
+        imp_neto: Valor de ImpNeto (rounded).
+        imp_tot_conc: Valor de ImpTotConc (non-taxable items, default 0).
+        imp_op_ex: Valor de ImpOpEx (exempt operations, default 0).
+        imp_iva: Valor de ImpIVA (total IVA, default 0).
+        imp_trib: Valor de ImpTrib (tributos, default 0).
+        tolerance: Margen para within_tolerance (default 0.01, per ARCA spec).
+
+    Returns:
+        dict with:
+            valid: True si la diferencia es exactamente 0.
+            expected: Suma calculada de componentes.
+            actual: Valor de imp_total recibido.
+            difference: |actual - expected|.
+            within_tolerance: difference <= tolerance (ARCA acepta con margen).
+            components: Dict con cada componente individual.
+    """
+    expected = round(imp_neto + imp_tot_conc + imp_op_ex + imp_iva + imp_trib, 2)
+    actual = round(imp_total, 2)
+    difference = round(abs(actual - expected), 2)
+
+    return {
+        "valid": difference == 0.0,
+        "expected": expected,
+        "actual": actual,
+        "difference": difference,
+        "within_tolerance": difference <= tolerance,
+        "components": {
+            "imp_neto": round(imp_neto, 2),
+            "imp_tot_conc": round(imp_tot_conc, 2),
+            "imp_op_ex": round(imp_op_ex, 2),
+            "imp_iva": round(imp_iva, 2),
+            "imp_trib": round(imp_trib, 2),
+        },
+    }
+
+
 def get_client_tipo_doc(cliente_cuit: str) -> tuple:
     """Determina el tipo de documento AFIP según el CUIT del cliente.
 

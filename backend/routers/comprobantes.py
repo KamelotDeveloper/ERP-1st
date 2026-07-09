@@ -11,7 +11,7 @@ from database import SessionLocal
 import models
 import schemas
 from services.comprobante_numbering import get_next_numero
-from services.comprobante_fiscal import generate_mock_cae, get_tipo_afip_from_tipo, get_client_tipo_doc
+from services.comprobante_fiscal import generate_mock_cae, get_tipo_afip_from_tipo, get_client_tipo_doc, validate_math
 
 logger = logging.getLogger(__name__)
 
@@ -309,6 +309,21 @@ def emitir_comprobante(id: int, db: Session = Depends(get_db)):
             "iva_alicuota": item.iva_alicuota or 0.0,
             "iva_importe": round(item.iva_importe or 0, 2),
         })
+
+    # -- Pre-flight mathematical validation (ARCA error code 10030) --
+    math_check = validate_math(
+        imp_total=round(c.total or 0, 2),
+        imp_neto=round(c.subtotal or 0, 2),
+        imp_iva=round(c.iva_importe or 0, 2),
+    )
+    if not math_check["valid"]:
+        logger.warning(
+            f"Validación matemática falló: "
+            f"total={math_check['actual']} ≠ "
+            f"expected={math_check['expected']} "
+            f"(diff={math_check['difference']}, "
+            f"tolerancia={'dentro' if math_check['within_tolerance'] else 'FUERA'})"
+        )
 
     if use_real:
         # Real WSFE
