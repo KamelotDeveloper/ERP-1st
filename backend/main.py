@@ -1,13 +1,20 @@
 import logging
 import os
+import socket
 import sys
+from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import text
+
 from limiter import limiter
-from database import engine
+from database import engine, SessionLocal
 from models import Base
 from routers.api import router
 from routers.invoices import router as invoices_router
@@ -34,10 +41,62 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+LAN_PORT = 8000
+
+
+def _get_lan_ip():
+    """Return the machine's LAN IP address, falling back to 127.0.0.1."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("10.255.255.255", 1))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
+# ---------------------------------------------------------------------------
+# Lifespan — startup / shutdown
+# ---------------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app):
+    """Manage application startup and shutdown lifecycle.
+
+    Startup: create tables, seed admin user.
+    Shutdown: flush WAL into main DB file.
+    """
+    # --- startup ---
+    logger.info("GA ERP System started")
+
+    # --- yield to application ---
+    yield
+
+    # --- shutdown ---
+    logger.info("GA ERP System shutting down")
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
+            conn.commit()
+    except Exception as exc:
+        logger.error(f"WAL checkpoint failed: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# FastAPI app
+# ---------------------------------------------------------------------------
+
 app = FastAPI(
     title="GA ERP System",
     description="ERP for Carpintería El Menestral",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 app.state.limiter = limiter
 
@@ -50,16 +109,10 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://tauri.localhost",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
-    allow_credentials=True,
+    # Tech-debt: wildcard origins for LAN mode.  The server PC is a trusted
+    # network host; restricting origins would break multi-PC LAN sharing.
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -89,7 +142,6 @@ Base.metadata.create_all(bind=engine)
 
 # Create default admin user if not exists
 from models import User
-from database import SessionLocal
 import bcrypt
 
 def create_default_admin():
@@ -139,17 +191,24 @@ app.include_router(comprobantes.router)
 # Health check
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "1.0.0"}
+    lan_ip = _get_lan_ip()
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "lan_ip": lan_ip,
+        "port": LAN_PORT,
+        "sharing_url": f"http://{lan_ip}:{LAN_PORT}",
+        "db": "wal",
+    }
 
 
-@app.on_event("startup")
-async def startup_event():
-    logger.info("GA ERP System started")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("GA ERP System shutting down")
+# Mount frontend static files at root (after all API routes)
+_frontend_dist = get_base_dir() / "frontend" / "dist"
+if not _frontend_dist.exists():
+    # Fallback: relative to backend/ directory
+    _frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _frontend_dist.exists():
+    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")
 
 
 # ============================================================
@@ -165,9 +224,9 @@ if __name__ == "__main__":
     if sys.stderr is None:
         sys.stderr = open(os.devnull, 'w')
     
-    # Determinar host y puerto
-    host = "127.0.0.1"
-    port = 8000
+    # Determinar host y puerto — 0.0.0.0 for LAN access
+    host = "0.0.0.0"
+    port = LAN_PORT
     
     logger.info(f"Iniciando servidor en {host}:{port}")
     

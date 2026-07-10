@@ -1,8 +1,22 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 from config import settings
 from utils.paths import is_frozen, get_base_dir
 import os
+import sqlite3
+
+
+def apply_sqlite_pragmas(dbapi_connection, connection_record):
+    """Set WAL journal mode and concurrency pragmas on SQLite connect.
+
+    Designed to be used as a SQLAlchemy ``event.listens_for(engine, "connect")``
+    callback, or called directly with a raw DB-API connection.
+    """
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
 
 
 def get_engine():
@@ -18,10 +32,12 @@ def get_engine():
             full_path = base / db_path
             url = f"sqlite:///{full_path}"
         
-        return create_engine(
+        eng = create_engine(
             url,
             connect_args={"check_same_thread": False}
         )
+        event.listen(eng, "connect", apply_sqlite_pragmas)
+        return eng
     elif url.startswith("postgresql"):
         return create_engine(
             url,
