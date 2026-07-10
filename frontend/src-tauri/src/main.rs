@@ -445,11 +445,11 @@ fn get_lan_ip(state: tauri::State<'_, AppState>) -> Result<String, String> {
     Ok(state.lan_ip.lock().unwrap().clone())
 }
 
-/// Tests connectivity to a remote server by hitting its /api/health endpoint.
+/// Tests connectivity to a remote server by hitting its /health endpoint.
 /// Returns `{ success: true, version: "..." }` or `{ success: false, error: "..." }`.
 #[tauri::command]
 async fn test_connection(ip: String) -> Result<serde_json::Value, String> {
-    let url = format!("http://{}:{}/api/health", ip, DEFAULT_PORT);
+    let url = format!("http://{}:{}/health", ip, DEFAULT_PORT);
     match reqwest::get(&url).await {
         Ok(resp) => {
             let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
