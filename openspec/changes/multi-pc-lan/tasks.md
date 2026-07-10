@@ -34,11 +34,11 @@ Chain strategy: pending
 
 ## Phase 2: Core Implementation (Tauri)
 
-- [ ] 2.1 `frontend/src-tauri/Cargo.toml` — Add `tauri-plugin-store` and `local-ip-address` deps
-- [ ] 2.2 `frontend/src-tauri/capabilities/default.json` — Add `"store:default"` permission
-- [ ] 2.3 `frontend/src-tauri/tauri.conf.json` — Change CSP `connect-src` to include `http://*:*`
-- [ ] 2.4 `frontend/src-tauri/src/main.rs` — Init `tauri-plugin-store`, wrap backend spawn in mode check (SERVER spawns, CLIENT skips)
-- [ ] 2.5 `frontend/src-tauri/src/main.rs` — Add commands: `get_mode`, `set_mode`, `get_server_ip`, `set_client_ip`, `get_lan_ip`, `test_connection`; add `lan_ip` and `sharing_url` to health response
+- [x] 2.1 `frontend/src-tauri/Cargo.toml` — Add `tauri-plugin-store` and `local-ip-address` deps
+- [x] 2.2 `frontend/src-tauri/capabilities/default.json` — Add `"store:default"` permission
+- [x] 2.3 `frontend/src-tauri/tauri.conf.json` — Change CSP `connect-src` to include `http://*:*`
+- [x] 2.4 `frontend/src-tauri/src/main.rs` — Init `tauri-plugin-store`, wrap backend spawn in mode check (SERVER spawns, CLIENT skips)
+- [x] 2.5 `frontend/src-tauri/src/main.rs` — Add commands: `get_mode`, `set_mode`, `get_server_ip`, `set_client_ip`, `get_lan_ip`, `test_connection`; add `lan_ip` and `sharing_url` to health response
 
 ## Phase 3: Integration / Wiring (Frontend)
 
