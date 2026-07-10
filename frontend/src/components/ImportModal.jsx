@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
 import api from "../services/api";
-import PropTypes from "prop-types";
 
 /* ------------------------------------------------------------------ */
 /*  Styles (dark theme, inline <style> matching project pattern)      */
@@ -1210,15 +1209,3 @@ export default function ImportModal({
   );
 }
 
-ImportModal.propTypes = {
-  resource: PropTypes.string.isRequired,
-  columns: PropTypes.arrayOf(
-    PropTypes.shape({
-      key: PropTypes.string,
-      label: PropTypes.string,
-      required: PropTypes.bool,
-    })
-  ).isRequired,
-  onImportComplete: PropTypes.func.isRequired,
-  onClose: PropTypes.func.isRequired,
-};
