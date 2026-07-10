@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 const isTauri = !!window.__TAURI_INTERNALS__;
 const invoke = isTauri
@@ -11,6 +11,8 @@ export default function ClientConfig() {
   const [mode, setMode] = useState("server");
   const [testStatus, setTestStatus] = useState(""); // "" | "loading" | "success" | "error"
   const [errorMsg, setErrorMsg] = useState("");
+  const [serverLanIp, setServerLanIp] = useState("");
+  const [serverIpLoading, setServerIpLoading] = useState(false);
 
   useEffect(() => {
     if (!isTauri || !invoke) return;
@@ -26,6 +28,30 @@ export default function ClientConfig() {
       })
       .catch(() => {});
   }, []);
+
+  const fetchServerIp = useCallback(async () => {
+    if (isTauri && invoke) {
+      try {
+        const ip = await invoke("get_server_ip");
+        setServerLanIp(ip);
+        return;
+      } catch {}
+    }
+    // Fallback: get LAN IP from health endpoint
+    setServerIpLoading(true);
+    try {
+      const res = await fetch("http://127.0.0.1:8000/health");
+      const data = await res.json();
+      if (data.lan_ip) setServerLanIp(data.lan_ip);
+    } catch {
+      setServerLanIp("Desconocida");
+    }
+    setServerIpLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (mode === "server") fetchServerIp();
+  }, [mode, fetchServerIp]);
 
   const handleTestConnection = async () => {
     if (!ip.trim()) {
@@ -157,11 +183,28 @@ export default function ClientConfig() {
 
       {mode === "server" && (
         <div className="cc-card">
-          <h3>Información</h3>
+          <h3>Compartir en la red</h3>
           <p className="cc-description">
-            Esta PC funciona como servidor. Los datos se comparten con los
-            clientes en la red local.
+            Esta PC funciona como servidor. Compartí esta dirección con las otras PCs:
           </p>
+          {serverIpLoading ? (
+            <p className="cc-loading-text">Obteniendo IP...</p>
+          ) : serverLanIp ? (
+            <div className="cc-ip-display">
+              <code>http://{serverLanIp}:8000</code>
+              <button
+                className="cc-copy-btn"
+                onClick={() => {
+                  navigator.clipboard.writeText(`http://${serverLanIp}:8000`);
+                  alert("Dirección copiada al portapapeles");
+                }}
+              >
+                Copiar
+              </button>
+            </div>
+          ) : (
+            <p className="cc-error-msg">No se pudo detectar la IP</p>
+          )}
         </div>
       )}
 
@@ -283,6 +326,43 @@ export default function ClientConfig() {
         }
         .cc-save-btn:hover {
           transform: translateY(-1px);
+        }
+        .cc-ip-display {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: #f1f5f9;
+          border: 2px dashed #0ea5e9;
+          border-radius: 10px;
+          padding: 14px 18px;
+          margin: 12px 0;
+        }
+        .cc-ip-display code {
+          font-size: 18px;
+          font-weight: 600;
+          color: #0f172a;
+          word-break: break-all;
+          flex: 1;
+        }
+        .cc-copy-btn {
+          background: linear-gradient(135deg, #0ea5e9, #0284c7);
+          color: white;
+          border: none;
+          padding: 8px 16px;
+          border-radius: 6px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.2s;
+        }
+        .cc-copy-btn:hover {
+          background: linear-gradient(135deg, #0284c7, #0369a1);
+        }
+        .cc-loading-text {
+          color: #64748b;
+          font-size: 14px;
+          margin: 8px 0;
         }
         .cc-save-btn:disabled {
           opacity: 0.4;
