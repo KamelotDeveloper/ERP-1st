@@ -2,6 +2,9 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useState, useEffect } from "react";
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
+import SetupWizard from "./components/SetupWizard";
+import ServerInfo from "./components/ServerInfo";
+import ClientConfig from "./components/ClientConfig";
 import Dashboard from "./pages/Dashboard";
 import Clients from "./pages/Clients";
 import Products from "./pages/Products";
@@ -14,23 +17,57 @@ import Produccion from "./pages/Produccion";
 import Budget from "./pages/Budget";
 import Comprobantes from "./pages/Comprobantes";
 import PlanSelection from "./pages/PlanSelection";
-import { iniciarSesion, verificarActivacion } from "./services/suscripcion";
+import { iniciarSesion } from "./services/suscripcion";
 import { appDataDir } from "@tauri-apps/api/path";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { getApi } from "./services/api";
+
+const isTauri = !!window.__TAURI_INTERNALS__;
+const invoke = isTauri
+  ? (cmd, args) => window.__TAURI_INTERNALS__.invoke(cmd, args)
+  : null;
 
 export default function App() {
   const [tieneAcceso, setTieneAcceso] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [clientId, setClientId] = useState(null);
 
+  // LAN mode state
+  const [lanMode, setLanMode] = useState(null); // null = checking, "none" = not Tauri, "server" | "client"
+  const [apiReady, setApiReady] = useState(false);
+
+  // 1) Resolve API base URL before anything else
   useEffect(() => {
+    const init = async () => {
+      await getApi();
+
+      // Check LAN mode if in Tauri
+      if (isTauri && invoke) {
+        try {
+          const mode = await invoke("get_mode");
+          setLanMode(mode);
+        } catch {
+          // No mode set yet — show wizard
+          setLanMode("none");
+        }
+      } else {
+        setLanMode("none");
+      }
+
+      setApiReady(true);
+    };
+    init();
+  }, []);
+
+  // 2) License check — only runs after api is ready
+  useEffect(() => {
+    if (!apiReady) return;
+
     const verificarAcceso = async () => {
       try {
-        // Generar o recuperar client_id con persistencia en Tauri
         let cid = localStorage.getItem("client_id");
-        
+
         if (!cid) {
-          // Intentar leer desde Tauri appDataDir (persiste entre reinstalaciones)
           try {
             const dir = await appDataDir();
             const stored = await readTextFile(dir + "client_id.txt");
@@ -39,12 +76,15 @@ export default function App() {
             }
           } catch (_) {}
         }
-        
+
         if (!cid) {
-          cid = "user_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+          cid =
+            "user_" +
+            Date.now() +
+            "_" +
+            Math.random().toString(36).substr(2, 9);
         }
-        
-        // Guardar en ambos lugares para máxima persistencia
+
         try {
           const dir = await appDataDir();
           await writeTextFile(dir + "client_id.txt", cid);
@@ -52,16 +92,22 @@ export default function App() {
         localStorage.setItem("client_id", cid);
         setClientId(cid);
 
-        // Verificar licencia usando el nuevo endpoint local
         const resultado = await iniciarSesion(cid);
-        
+
         if (resultado.ok) {
           setTieneAcceso(true);
-          // Guardar información de la licencia si es necesario
           if (resultado.tipo === "licencia") {
-            console.log("Licencia activa:", resultado.plan, "- días restantes:", resultado.dias_restantes);
+            console.log(
+              "Licencia activa:",
+              resultado.plan,
+              "- días restantes:",
+              resultado.dias_restantes
+            );
           } else if (resultado.tipo === "trial") {
-            console.log("Trial activo - días restantes:", resultado.dias_restantes);
+            console.log(
+              "Trial activo - días restantes:",
+              resultado.dias_restantes
+            );
           }
         } else {
           setTieneAcceso(false);
@@ -69,7 +115,6 @@ export default function App() {
         }
       } catch (error) {
         console.error("Error verificando licencia:", error);
-        // Si hay error de conexión, asumir que no tiene acceso
         setTieneAcceso(false);
       } finally {
         setCargando(false);
@@ -77,35 +122,47 @@ export default function App() {
     };
 
     verificarAcceso();
-  }, []);
+  }, [apiReady]);
 
   const handleActivar = (fechaExpiracion) => {
     setTieneAcceso(true);
     console.log("Acceso activado hasta:", fechaExpiracion);
   };
 
-  if (cargando) {
+  // Loading state — shows during API init + license check
+  if (!apiReady || cargando) {
     return (
-      <div style={{
-        minHeight: "100vh",
-        backgroundColor: "#1f2937",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }}>
-        <p style={{ color: "white", fontSize: "1.5rem" }}>Verificando licencia...</p>
+      <div
+        style={{
+          minHeight: "100vh",
+          backgroundColor: "#1f2937",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <p style={{ color: "white", fontSize: "1.5rem" }}>
+          {apiReady ? "Verificando licencia..." : "Conectando..."}
+        </p>
       </div>
     );
   }
 
-  // Si NO tiene acceso, mostrar PlanSelection
+  // Setup wizard — first run (no mode configured in Tauri store)
+  if (isTauri && lanMode === "none") {
+    return <SetupWizard onComplete={() => setLanMode("server")} />;
+  }
+
+  // License check — no access
   if (!tieneAcceso) {
     return <PlanSelection onActivar={handleActivar} clientId={clientId} />;
   }
 
-  // Si SÍ tiene acceso, mostrar la app normal
+  // Main app
   return (
     <BrowserRouter>
+      {/* Server banner — only in server mode */}
+      {lanMode === "server" && <ServerInfo />}
       <div className="layout">
         <Sidebar />
         <div className="main">
@@ -118,10 +175,14 @@ export default function App() {
             <Route path="/materials" element={<Materials />} />
             <Route path="/sales" element={<Sales />} />
             <Route path="/invoices" element={<Invoices />} />
-            <Route path="/electronic-invoicing" element={<ElectronicInvoicing />} />
+            <Route
+              path="/electronic-invoicing"
+              element={<ElectronicInvoicing />}
+            />
             <Route path="/produccion" element={<Produccion />} />
             <Route path="/budget" element={<Budget />} />
             <Route path="/comprobantes" element={<Comprobantes />} />
+            <Route path="/settings" element={<ClientConfig />} />
           </Routes>
         </div>
       </div>

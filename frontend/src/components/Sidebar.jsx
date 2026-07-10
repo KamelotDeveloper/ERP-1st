@@ -64,6 +64,12 @@ export default function Sidebar() {
         </button>
       </div>
 
+      <div className="sidebar-bottom-links">
+        <NavLink to="/settings" className="nav-item">
+          ⚙️ Configuración
+        </NavLink>
+      </div>
+
       <div className="sidebar-footer">
         <p>© 2026 Ordo ERP</p>
       </div>

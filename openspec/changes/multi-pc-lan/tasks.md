@@ -42,14 +42,14 @@ Chain strategy: pending
 
 ## Phase 3: Integration / Wiring (Frontend)
 
-- [ ] 3.1 `frontend/src/services/api.js` — Refactor to async init: read `server_ip` + `lan_mode` from `@tauri-apps/plugin-store`, fallback to `127.0.0.1:8000`
-- [ ] 3.2 Create `frontend/src/components/SetupWizard.jsx` — Full-screen first-run: "Servidor" (auto-detects LAN IP) or "Cliente" (IP input + connection test)
-- [ ] 3.3 Create `frontend/src/components/ServerInfo.jsx` — Dismissible banner: "Compartiendo en http://{lan_ip}:8000"
-- [ ] 3.4 Create `frontend/src/components/ClientConfig.jsx` — Settings page: show current IP, edit form, connection test before save, gear icon in navbar
-- [ ] 3.5 `frontend/src/App.jsx` — Add startup config check: if no `lan_mode` in store, render `<SetupWizard>` before `<Dashboard>`; add `/settings` route
-- [ ] 3.6 `frontend/src/components/Sidebar.jsx` — Add NavLink to `/settings` (gear icon)
-- [ ] 3.7 `frontend/src/components/Navbar.jsx` — Integrate `<ServerInfo>` banner in SERVER mode
-- [ ] 3.8 `frontend/src/styles.css` — Add styles for wizard, banner, settings form, connection status indicators
+- [x] 3.1 `frontend/src/services/api.js` — Refactor to async init: read `server_ip` + `lan_mode` from `@tauri-apps/plugin-store`, fallback to `127.0.0.1:8000`
+- [x] 3.2 Create `frontend/src/components/SetupWizard.jsx` — Full-screen first-run: "Servidor" (auto-detects LAN IP) or "Cliente" (IP input + connection test)
+- [x] 3.3 Create `frontend/src/components/ServerInfo.jsx` — Dismissible banner: "Compartiendo en http://{lan_ip}:8000"
+- [x] 3.4 Create `frontend/src/components/ClientConfig.jsx` — Settings page: show current IP, edit form, connection test before save, gear icon in navbar
+- [x] 3.5 `frontend/src/App.jsx` — Add startup config check: if no `lan_mode` in store, render `<SetupWizard>` before `<Dashboard>`; add `/settings` route
+- [x] 3.6 `frontend/src/components/Sidebar.jsx` — Add NavLink to `/settings` (gear icon)
+- [x] 3.7 `frontend/src/components/Navbar.jsx` — Integrate `<ServerInfo>` banner in SERVER mode
+- [x] 3.8 `frontend/src/styles.css` — Add styles for wizard, banner, settings form, connection status indicators
 
 ## Phase 4: Testing
 
