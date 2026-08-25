@@ -1,4 +1,4 @@
-# GA ERP System - Carpintería El Menestral
+# Ordo ERP System
 
 ## Project Overview
 
@@ -36,13 +36,13 @@ uvicorn main:app --reload --port 8000
 cd frontend
 
 # Install dependencies
-npm install
+pnpm install
 
 # Development
-npm run dev
+pnpm run dev
 
 # Production build
-npm run build
+pnpm run build
 ```
 
 ### Desktop App (Tauri)
@@ -50,10 +50,10 @@ npm run build
 cd frontend
 
 # Install dependencies (first time)
-npm install
+pnpm install
 
 # Build installers (Windows MSI, Mac DMG)
-npm run tauri build
+pnpm run tauri build
 ```
 
 ### Running All Services
@@ -62,7 +62,7 @@ npm run tauri build
 cd backend && venv\Scripts\activate && uvicorn main:app --reload
 
 # Terminal 2: Frontend
-cd frontend && npm run dev
+cd frontend && pnpm run dev
 ```
 
 ---

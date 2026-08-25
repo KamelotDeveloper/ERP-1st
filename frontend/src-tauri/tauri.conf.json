@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Ordo ERP",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "identifier": "com.ordo.erp",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "pnpm run dev",
+    "beforeBuildCommand": "pnpm run build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },
@@ -29,7 +29,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "dmg"],
+    "targets": ["msi", "dmg"],
     "resources": [],
     "externalBin": [
       "./binaries/ga-erp-backend"
@@ -45,9 +45,10 @@
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
       "timestampUrl": "",
-      "nsis": {
-        "installMode": "currentUser",
-        "installerHooks": "installer-hooks.nsh"
+      "wix": {
+        "language": "es-ES",
+        "fragmentPaths": [],
+        "componentRefs": []
       }
     },
     "publisher": "Ordo ERP",
