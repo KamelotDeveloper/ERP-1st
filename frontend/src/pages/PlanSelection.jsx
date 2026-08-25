@@ -43,8 +43,8 @@ export default function PlanSelection({ onActivar, clientId }) {
         return;
       }
       
-      // Llamar al backend local para INICIAR el trial
-      const result = await iniciarSesion(clientId);
+      // Llamar al backend local para INICIAR el trial (unico lugar autorizado a crearlo)
+      const result = await iniciarSesion(clientId, true);
       
       if (result.ok && result.tipo === "trial") {
         onActivar(result.fecha_fin);
@@ -223,6 +223,7 @@ export default function PlanSelection({ onActivar, clientId }) {
       <p style={{ marginTop: "2rem", color: "#6b7280", fontSize: "0.9rem" }}>
         © 2026 Ordo ERP
       </p>
+
     </div>
   );
 }

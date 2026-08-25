@@ -889,7 +889,7 @@ def iniciar_sesion(data: dict, db: Session = Depends(get_db)):
     """
     try:
         client_id = data.get("client_id")
-        crear_trial = data.get("crear_trial", True)
+        crear_trial = data.get("crear_trial", False)
         
         if not client_id:
             raise HTTPException(status_code=400, detail="client_id requerido")
@@ -924,18 +924,18 @@ def iniciar_sesion(data: dict, db: Session = Depends(get_db)):
         
         # 2. Si no hay licencia en Supabase, verificar trial local
         if not license_data:
-            # Buscar trial local en SQLite
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            # Buscar el trial mas reciente del client_id (activo o no).
+            # Si ya hubo un trial para este client_id, JAMAS se crea otro.
             trial = db.query(models.LicenseTrial).filter(
-                models.LicenseTrial.client_id == client_id,
-                models.LicenseTrial.activo == True
-            ).first()
-            
+                models.LicenseTrial.client_id == client_id
+            ).order_by(models.LicenseTrial.fecha_inicio.desc()).first()
+
             if trial:
                 # Verificar si el trial sigue vigente
-                from datetime import datetime, timedelta
-                now = datetime.now()
                 trial_end = trial.fecha_inicio + timedelta(days=15)
-                
+
                 if now < trial_end:
                     days_left = (trial_end - now).days
                     return {
@@ -945,20 +945,20 @@ def iniciar_sesion(data: dict, db: Session = Depends(get_db)):
                         "fecha_fin": trial_end.isoformat()
                     }
                 else:
-                    # Trial vencido
-                    trial.activo = False
-                    db.commit()
+                    # Trial vencido (idempotente)
+                    if trial.activo:
+                        trial.activo = False
+                        db.commit()
                     return {
                         "ok": False,
                         "error": "trial_expirado",
                         "mensaje": "El periodo de prueba ha finalizado"
                     }
             elif crear_trial:
-                # No hay trial, crear uno nuevo (solo si crear_trial=true)
-                from datetime import datetime, timedelta
+                # Nunca hubo trial para este client_id y se pide explicitamente crearlo
                 new_trial = models.LicenseTrial(
                     client_id=client_id,
-                    fecha_inicio=datetime.now(),
+                    fecha_inicio=now,
                     activo=True
                 )
                 db.add(new_trial)
@@ -967,7 +967,7 @@ def iniciar_sesion(data: dict, db: Session = Depends(get_db)):
                     "ok": True,
                     "tipo": "trial",
                     "dias_restantes": 15,
-                    "fecha_fin": (datetime.now() + timedelta(days=15)).isoformat()
+                    "fecha_fin": (now + timedelta(days=15)).isoformat()
                 }
             else:
                 # Solo consulta, no crear trial

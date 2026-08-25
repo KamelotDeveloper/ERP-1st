@@ -74,9 +74,10 @@ export async function verificarSuscripcion(client_id) {
 
 // ==================== INICIAR SESIÓN (NUEVO ENDPOINT) ====================
 
-export async function iniciarSesion(client_id) {
+export async function iniciarSesion(client_id, crearTrial = false) {
   const response = await suscripcionApi.post('/iniciar-sesion', {
-    client_id
+    client_id,
+    crear_trial: crearTrial
   });
   return response.data;
 }
