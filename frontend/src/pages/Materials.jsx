@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
 import ImportModal from "../components/ImportModal";
+import BarcodeLabel from "../components/BarcodeLabel";
+import BarcodePrintModal from "../components/BarcodePrintModal";
 
 const IMPORT_COLUMNS = [
   { key: "sku", label: "SKU", required: false },
@@ -32,6 +34,8 @@ export default function Materials() {
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 20;
   const [loading, setLoading] = useState(false);
+  const [printItems, setPrintItems] = useState([]);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const loadData = async (page = 1) => {
     setLoading(true);
@@ -132,6 +136,25 @@ export default function Materials() {
     loadData(1);
   }, []);
 
+  const openPrintLabel = (material) => {
+    if (!material.sku) {
+      alert("Este material no tiene SKU asignado. Asigná uno primero.");
+      return;
+    }
+    setPrintItems([{ sku: material.sku, name: material.name, price: material.unit_price }]);
+    setShowPrintModal(true);
+  };
+
+  const printAllLabels = () => {
+    const withSku = data.filter((m) => m.sku);
+    if (withSku.length === 0) {
+      alert("No hay materiales con SKU para imprimir.");
+      return;
+    }
+    setPrintItems(withSku.map((m) => ({ sku: m.sku, name: m.name, price: m.unit_price })));
+    setShowPrintModal(true);
+  };
+
   const grouped = data.reduce((acc, item) => {
     const cat = item.category || "Sin categoría";
     if (!acc[cat]) acc[cat] = [];
@@ -141,7 +164,12 @@ export default function Materials() {
 
   return (
     <div className="container">
-      <h2>Materiales</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+        <h2 style={{ margin: 0 }}>Materiales</h2>
+        <button className="btn" onClick={printAllLabels}>
+          🖨️ Imprimir Etiquetas
+        </button>
+      </div>
 
       {error && (
         <div style={{ color: "red", marginBottom: "10px" }}>{error}</div>
@@ -273,7 +301,7 @@ export default function Materials() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>SKU</th>
+                <th>Código</th>
                 <th>Nombre</th>
                 <th>Stock</th>
                 <th>Stock mín</th>
@@ -288,7 +316,9 @@ export default function Materials() {
               {grouped[cat].map((i) => (
                 <tr key={i.id}>
                   <td>{i.id}</td>
-                  <td>{i.sku || "-"}</td>
+                  <td>
+                    <BarcodeLabel value={i.sku} showPrice={false} size="small" />
+                  </td>
                   <td>{i.name}</td>
                   <td>{i.current_stock}</td>
                   <td>{i.stock_minimo || 0}</td>
@@ -299,6 +329,13 @@ export default function Materials() {
                     <div className="action-buttons">
                       <button className="btn btn-edit" onClick={() => edit(i)}>
                         Editar
+                      </button>
+                      <button
+                        className="btn"
+                        onClick={() => openPrintLabel(i)}
+                        title="Imprimir etiqueta"
+                      >
+                        🖨️
                       </button>
                       <button className="btn btn-delete" onClick={() => del(i.id)}>
                         Eliminar
@@ -331,6 +368,12 @@ export default function Materials() {
           </button>
         </div>
       )}
+
+      <BarcodePrintModal
+        open={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        items={printItems}
+      />
     </div>
   );
 }

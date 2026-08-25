@@ -23,6 +23,79 @@ from routers import auth
 from config import settings
 from utils.paths import get_base_dir
 
+# ── reportlab barcode preload (non-fatal) ──────────────────────────────
+# PyInstaller frozen apps cannot handle reportlab.graphics.barcode's
+# dynamic exec()-based imports (_reset).  Preload all submodules here
+# so they are in sys.modules before any code triggers _reset.
+# Wrapped in try/except because this runs during boot — a failure here
+# must NOT crash the backend.
+try:
+    import importlib.util
+    import types
+
+    import reportlab
+    import reportlab.graphics
+
+    _BARCODE_MODULES = [
+        'reportlab.graphics.barcode.code128',
+        'reportlab.graphics.barcode.code39',
+        'reportlab.graphics.barcode.code93',
+        'reportlab.graphics.barcode.common',
+        'reportlab.graphics.barcode.eanbc',
+        'reportlab.graphics.barcode.usps',
+        'reportlab.graphics.barcode.usps4s',
+        'reportlab.graphics.barcode.ecc200datamatrix',
+        'reportlab.graphics.barcode.fourstate',
+        'reportlab.graphics.barcode.lto',
+        'reportlab.graphics.barcode.qr',
+        'reportlab.graphics.barcode.qrencoder',
+        'reportlab.graphics.barcode.dmtx',
+        'reportlab.graphics.barcode.widgets',
+    ]
+
+    fake_pkg = types.ModuleType('reportlab.graphics.barcode')
+    fake_pkg.__path__ = []
+    fake_pkg.__package__ = 'reportlab.graphics.barcode'
+    # Save the real module so we can restore it if preload fails
+    _real_bc = sys.modules.get('reportlab.graphics.barcode')
+    if _real_bc is not None:
+        sys.modules['_reportlab_bc_real_preload'] = _real_bc
+    sys.modules['reportlab.graphics.barcode'] = fake_pkg
+
+    for modname in _BARCODE_MODULES:
+        if modname in sys.modules:
+            continue
+        for importer in sys.meta_path:
+            if hasattr(importer, 'find_spec'):
+                spec = importer.find_spec(modname)
+                if spec is not None:
+                    try:
+                        mod = importlib.util.module_from_spec(spec)
+                        sys.modules[modname] = mod
+                        spec.loader.exec_module(mod)
+                    except Exception:
+                        if modname in sys.modules:
+                            del sys.modules[modname]
+                    break
+
+    # Replace fake package with real one
+    del sys.modules['reportlab.graphics.barcode']
+    import reportlab.graphics.barcode  # noqa: F811
+except Exception as exc:
+    # Roll back the fake package so downstream imports (xhtml2pdf) get the
+    # real reportlab.graphics.barcode module, not our stub.
+    _real_bc = sys.modules.get('_reportlab_bc_real_preload')
+    if _real_bc is not None:
+        sys.modules['reportlab.graphics.barcode'] = _real_bc
+        del sys.modules['_reportlab_bc_real_preload']
+    elif 'reportlab.graphics.barcode' in sys.modules:
+        # fake_pkg or partial — remove it so Python re-imports the real one
+        del sys.modules['reportlab.graphics.barcode']
+    logging.getLogger(__name__).warning(
+        "reportlab barcode preload skipped (%s). Barcode features may not work.", exc
+    )
+# ────────────────────────────────────────────────────────────────────────
+
 # Usar directorio del ejecutable para logs (NO _MEIPASS)
 LOG_DIR = get_base_dir() / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -94,7 +167,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="GA ERP System",
-    description="ERP for Carpintería El Menestral",
+    description="ERP for Ordo ERP",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -109,10 +182,12 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 
 app.add_middleware(
     CORSMiddleware,
-    # Tech-debt: wildcard origins for LAN mode.  The server PC is a trusted
-    # network host; restricting origins would break multi-PC LAN sharing.
+    # allow_origins=["*"] + allow_credentials=True makes Starlette echo
+    # the request's origin (e.g. "tauri://localhost") instead of "*".
+    # This is REQUIRED because Chromium/Webview2 rejects wildcard when
+    # the origin is a non-HTTP protocol like tauri://localhost.
     allow_origins=["*"],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -151,17 +226,17 @@ def create_default_admin():
         admin = db.query(User).filter(User.role == "admin").first()
         if not admin:
             # Create default admin user
-            hashed = bcrypt.hashpw("elmenestral123".encode(), bcrypt.gensalt())
+            hashed = bcrypt.hashpw("ordo123".encode(), bcrypt.gensalt())
             admin = User(
-                username="elmenestral",
-                email="info@elmenestral.com",
+                username="admin",
+                email="info@ordoerp.com",
                 hashed_password=hashed.decode(),
                 role="admin",
                 is_active=True
             )
             db.add(admin)
             db.commit()
-            logger.info("Default admin user created: elmenestral")
+            logger.info("Default admin user created: admin")
         else:
             logger.info("Admin user already exists")
     except Exception as e:
@@ -187,6 +262,8 @@ from routers import suscripcion
 app.include_router(suscripcion.router)
 from routers import comprobantes
 app.include_router(comprobantes.router)
+from routers import barcodes
+app.include_router(barcodes.router)
 
 # Health check
 @app.get("/health")

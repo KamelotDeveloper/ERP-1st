@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
 import ImportModal from "../components/ImportModal";
+import BarcodeLabel from "../components/BarcodeLabel";
+import BarcodePrintModal from "../components/BarcodePrintModal";
 
 const IMPORT_COLUMNS = [
   { key: "sku", label: "SKU", required: false },
@@ -22,6 +24,8 @@ export default function Products() {
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 20;
   const [loading, setLoading] = useState(false);
+  const [printItems, setPrintItems] = useState([]);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const loadData = async (page = 1) => {
     setLoading(true);
@@ -108,9 +112,33 @@ export default function Products() {
     loadData(1);
   }, []);
 
+  const openPrintLabel = (product) => {
+    if (!product.sku) {
+      alert("Este producto no tiene SKU asignado. Asigná uno primero.");
+      return;
+    }
+    setPrintItems([{ sku: product.sku, name: product.name, price: product.price }]);
+    setShowPrintModal(true);
+  };
+
+  const printAllLabels = () => {
+    const withSku = data.filter((p) => p.sku);
+    if (withSku.length === 0) {
+      alert("No hay productos con SKU para imprimir.");
+      return;
+    }
+    setPrintItems(withSku.map((p) => ({ sku: p.sku, name: p.name, price: p.price })));
+    setShowPrintModal(true);
+  };
+
   return (
     <div className="container">
-      <h2>Productos</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+        <h2 style={{ margin: 0 }}>Productos</h2>
+        <button className="btn" onClick={printAllLabels}>
+          🖨️ Imprimir Etiquetas
+        </button>
+      </div>
 
       {error && (
         <div style={{ color: "red", marginBottom: "10px" }}>{error}</div>
@@ -212,7 +240,7 @@ export default function Products() {
         <thead>
           <tr>
             <th>ID</th>
-            <th>SKU</th>
+            <th>Código</th>
             <th>Nombre</th>
             <th>Precio</th>
             <th>Stock</th>
@@ -232,7 +260,9 @@ export default function Products() {
             data.map((i) => (
               <tr key={i.id}>
                 <td>{i.id}</td>
-                <td>{i.sku}</td>
+                <td>
+                  <BarcodeLabel value={i.sku} showPrice={false} size="small" />
+                </td>
                 <td>{i.name}</td>
                 <td>${i.price}</td>
                 <td>{i.stock}</td>
@@ -242,6 +272,13 @@ export default function Products() {
                   <div className="action-buttons">
                     <button className="btn btn-edit" onClick={() => edit(i)}>
                       Editar
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => openPrintLabel(i)}
+                      title="Imprimir etiqueta"
+                    >
+                      🖨️
                     </button>
                     <button
                       className="btn btn-delete"
@@ -276,6 +313,12 @@ export default function Products() {
           </button>
         </div>
       )}
+
+      <BarcodePrintModal
+        open={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        items={printItems}
+      />
     </div>
   );
 }
