@@ -22,3 +22,13 @@ frontend/dist/
 *.db-journal
 *.db-wal
 *.db-shm
+
+# Local secrets and certs — never commit
+.env
+backend/.env
+*.key
+backend/.key_encrypt_secret
+certs/
+backend/certs/
+*.log
+*.err
