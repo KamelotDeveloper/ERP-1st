@@ -8,6 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from config import settings
+from pricing import KNOWN_APPS, get_planes_for_app
 
 router = APIRouter(prefix="/api/suscripcion", tags=["Suscripciones Fase 1"])
 
@@ -15,12 +16,14 @@ router = APIRouter(prefix="/api/suscripcion", tags=["Suscripciones Fase 1"])
 
 class CrearPreferenciaRequest(BaseModel):
     client_id: str
-    email: str
+    app_id: str = "ordo"
+    email: Optional[str] = None  # Opcional: Checkout Pro no lo exige
     plan: str  # '1_mes', '6_meses', '1_anio'
     codigo_descuento: Optional[str] = None
 
 class VerificarRequest(BaseModel):
     client_id: str
+    app_id: str = "ordo"
 
 class CodigoDescuentoRequest(BaseModel):
     codigo: str
@@ -48,31 +51,7 @@ def get_supabase_url():
 
 # ==================== PLANES ====================
 
-# Planes por defecto (en caso de que Supabase no responda)
-DEFAULT_PLANES = [
-    {
-        "id": "1_mes",
-        "nombre": "Mensual",
-        "descripcion": "Acceso completo por 1 mes",
-        "precio": 35000,  # ARS
-        "dias": 30
-    },
-    {
-        "id": "6_meses",
-        "nombre": "Semestral",
-        "descripcion": "Acceso completo por 6 meses",
-        "precio": 180000,  # ARS
-        "dias": 180
-    },
-    {
-        "id": "1_anio",
-        "nombre": "Anual",
-        "descripcion": "Acceso completo por 1 año",
-        "precio": 300000,  # ARS
-        "dias": 365
-    }
-]
-
+# Planes por defecto por app: fuente unica en pricing.get_planes_for_app()
 PRUEBA_GRATIS = {
     "id": "prueba",
     "nombre": "Prueba Gratis",
@@ -81,16 +60,20 @@ PRUEBA_GRATIS = {
     "dias": 7
 }
 
-def get_planes_from_supabase():
+def get_planes_from_supabase(app_id: str = "ordo"):
     """
-    Lee planes desde Supabase (remoto y modificable).
-    Si Supabase falla, devuelve DEFAULT_PLANES.
+    Lee planes desde Supabase (remoto y modificable), filtrados por app_id.
+    Si Supabase falla, devuelve los planes por defecto de la app correspondiente.
+    app_id desconocido -> 400 (fail-loud, nunca default a 'ordo').
     """
+    if app_id not in KNOWN_APPS:
+        raise HTTPException(status_code=400, detail=f"app_id invalido: {app_id}")
+
     try:
         supabase_url = get_supabase_url()
         headers = get_supabase_headers()
         
-        url = f"{supabase_url}/rest/v1/planes_suscripcion?select=*&activo=eq.true"
+        url = f"{supabase_url}/rest/v1/planes_suscripcion?select=*&activo=eq.true&app_id=eq.{app_id}"
         resp = requests.get(url, headers=headers, timeout=5)
         resp.raise_for_status()
         
@@ -108,13 +91,13 @@ def get_planes_from_supabase():
     except Exception as e:
         print(f"Error leyendo planes de Supabase: {e}")
     
-    # Fallback a planes por defecto
-    return DEFAULT_PLANES
+    # Fallback a planes por defecto de la app correspondiente
+    return get_planes_for_app(app_id)
 
 @router.get("/planes")
-def obtener_planes():
-    """Devuelve los planes disponibles desde Supabase (o fallback local)"""
-    planes = get_planes_from_supabase()
+def obtener_planes(app_id: str = "ordo"):
+    """Devuelve los planes disponibles desde Supabase (o fallback local) para la app indicada"""
+    planes = get_planes_from_supabase(app_id)
     return {
         "ok": True,
         "planes": planes,
@@ -129,29 +112,36 @@ def crear_preferencia(data: CrearPreferenciaRequest):
     Crea o actualiza una suscripcion en Supabase y genera link de MercadoPago.
     Fase 1: Si no hay MP_ACCESS_TOKEN, devuelve mock.
     """
-    # Validar plan - usar fallback de planes por defecto
-    planes = get_planes_from_supabase()
+    # Validar plan - usar planes de la app correspondiente
+    planes = get_planes_from_supabase(data.app_id)
     plan_info = next((p for p in planes if p["id"] == data.plan), None)
     if not plan_info:
         raise HTTPException(status_code=400, detail="Plan invalido")
     
+    # Contrato: external_reference = `${app_id}:${client_id}`.
+    # Los valores no pueden contener ':' porque el webhook hace split por el primer ':'
+    if ":" in data.client_id or ":" in data.app_id:
+        raise HTTPException(status_code=400, detail="app_id y client_id no pueden contener ':'")
+    
     # Calcular fecha de expiracion
     fecha_expiracion = datetime.utcnow() + timedelta(days=plan_info["dias"])
     
-    # Aplicar codigo de descuento si existe
+    # Aplicar codigo de descuento si existe (solo valida; el consumo ocurre
+    # DESPUES de que el POST a MercadoPago tenga exito - ver D4 del diseno)
     precio_final = plan_info["precio"]
     if data.codigo_descuento:
         codigo_info = validar_codigo_supabase(data.codigo_descuento, data.plan)
-        if codigo_info:
-            descuento = int(precio_final * codigo_info["descuento_porcentaje"] / 100)
-            precio_final = precio_final - descuento
+        if not codigo_info:
+            raise HTTPException(status_code=400, detail="Codigo invalido, expirado o sin usos disponibles")
+        descuento = int(precio_final * codigo_info["descuento_porcentaje"] / 100)
+        precio_final = precio_final - descuento
     
     # Guardar/Actualizar en Supabase
     supabase_url = get_supabase_url()
     headers = get_supabase_headers()
     
-    # Verificar si ya existe
-    check_url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{data.client_id}"
+    # Verificar si ya existe (una fila por (client_id, app_id))
+    check_url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{data.client_id}&app_id=eq.{data.app_id}"
     try:
         check_resp = requests.get(check_url, headers=headers, timeout=10)
         check_resp.raise_for_status()
@@ -161,9 +151,12 @@ def crear_preferencia(data: CrearPreferenciaRequest):
     
     suscripcion_data = {
         "client_id": data.client_id,
+        "app_id": data.app_id,
         "email": data.email,
         "plan": data.plan,
-        "estado": "prueba" if precio_final == 0 else "activo",
+        # G2 lifecycle: paid -> 'pendiente' (only approved payment flips to
+        # 'activo'); gratis (0 or 100% discount) keeps 'prueba' (D5).
+        "estado": "prueba" if precio_final == 0 else "pendiente",
         "fecha_inicio": datetime.utcnow().isoformat(),
         "fecha_expiracion": fecha_expiracion.isoformat(),
         "mp_payment_id": None
@@ -172,7 +165,7 @@ def crear_preferencia(data: CrearPreferenciaRequest):
     try:
         if existentes and len(existentes) > 0:
             # Actualizar existente
-            update_url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{data.client_id}"
+            update_url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{data.client_id}&app_id=eq.{data.app_id}"
             resp = requests.patch(update_url, headers=headers, json=suscripcion_data, timeout=10)
         else:
             # Crear nuevo
@@ -184,7 +177,9 @@ def crear_preferencia(data: CrearPreferenciaRequest):
     
     # Generar link de MercadoPago (Fase 1: Mock o real)
     if precio_final == 0:
-        # Es gratis (prueba o codigo 100%)
+        # Es gratis (prueba o codigo 100%): el codigo igual se consume (D4)
+        if data.codigo_descuento:
+            consumir_codigo_descuento(data.codigo_descuento, data.plan, data.client_id)
         return {
             "success": True,
             "message": "Suscripcion gratuita activada",
@@ -198,7 +193,7 @@ def crear_preferencia(data: CrearPreferenciaRequest):
         mock_payment_id = f"mock_{data.client_id}_{datetime.utcnow().timestamp()}"
         
         # Actualizar mp_payment_id en Supabase
-        update_url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{data.client_id}"
+        update_url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{data.client_id}&app_id=eq.{data.app_id}"
         requests.patch(update_url, headers=headers, json={"mp_payment_id": mock_payment_id}, timeout=10)
         
         return {
@@ -206,6 +201,7 @@ def crear_preferencia(data: CrearPreferenciaRequest):
             "message": "Modo simulado (sin MP_ACCESS_TOKEN)",
             "payment_id": mock_payment_id,
             "payment_url": f"http://127.0.0.1:8000/api/suscripcion/mock-pago?payment_id={mock_payment_id}",
+            "init_point": f"http://127.0.0.1:8000/api/suscripcion/mock-pago?payment_id={mock_payment_id}",
             "modo": "mock",
             "suscripcion": suscripcion_data
         }
@@ -220,42 +216,58 @@ def crear_preferencia(data: CrearPreferenciaRequest):
     preference_data = {
         "items": [
             {
-                "title": f"Suscripcion GA ERP - {plan_info['nombre']}",
+                "title": f"Suscripcion GA Software - {plan_info['nombre']}",
                 "quantity": 1,
                 "currency_id": "ARS",
                 "unit_price": float(precio_final)
             }
         ],
-        "payer": {
-            "email": data.email
-        },
         "back_urls": {
             "success": settings.MP_SUCCESS_URL,
             "failure": settings.MP_FAILURE_URL,
             "pending": settings.MP_PENDING_URL
         },
         "auto_return": "approved",
-        "external_reference": data.client_id
+        "external_reference": f"{data.app_id}:{data.client_id}",
+        "notification_url": settings.MP_NOTIFICATION_URL,
+        # G1 contract: metadata lets the webhook resolve the correct plan
+        # (6_meses / 1_anio no longer default to '1_mes' on approval)
+        "metadata": {
+            "app_id": data.app_id,
+            "client_id": data.client_id,
+            "plan": data.plan,
+            "email": data.email
+        }
     }
+    if data.email:
+        preference_data["payer"] = {"email": data.email}
     
     try:
         mp_resp = requests.post(mp_url, headers=mp_headers, json=preference_data, timeout=30)
         mp_resp.raise_for_status()
         mp_data = mp_resp.json()
-        
+
+        # D4: consume discount ONLY after the MP POST succeeded -
+        # an MP failure must never consume the code.
+        if data.codigo_descuento:
+            consumir_codigo_descuento(data.codigo_descuento, data.plan, data.client_id)
+
         # Actualizar mp_payment_id
-        update_url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{data.client_id}"
+        update_url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{data.client_id}&app_id=eq.{data.app_id}"
         requests.patch(update_url, headers=headers, json={"mp_payment_id": mp_data.get("id")}, timeout=10)
-        
-        return {
-            "success": True,
-            "preference_id": mp_data.get("id"),
-            "payment_url": mp_data.get("init_point"),  # URL para redirigir a MP
-            "modo": "real",
-            "suscripcion": suscripcion_data
-        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando preferencia MP: {str(e)}")
+
+    return {
+        "success": True,
+        "preference_id": mp_data.get("id"),
+        "payment_url": mp_data.get("init_point"),  # URL para redirigir a MP
+        "init_point": mp_data.get("init_point"),
+        "modo": "real",
+        "suscripcion": suscripcion_data
+    }
 
 # ==================== VERIFICAR SUSCRIPCION ====================
 
@@ -267,7 +279,7 @@ def verificar_suscripcion(data: VerificarRequest):
     supabase_url = get_supabase_url()
     headers = get_supabase_headers()
     
-    url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{data.client_id}&select=*"
+    url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{data.client_id}&app_id=eq.{data.app_id}&select=*"
     
     try:
         resp = requests.get(url, headers=headers, timeout=10)
@@ -291,13 +303,17 @@ def verificar_suscripcion(data: VerificarRequest):
     
     if fecha_exp < ahora and sub["estado"] == "activo":
         # Actualizar a expirado en Supabase
-        update_url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{data.client_id}"
+        update_url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{data.client_id}&app_id=eq.{data.app_id}"
         requests.patch(update_url, headers=headers, json={"estado": "expirado"}, timeout=10)
         sub["estado"] = "expirado"
     
+    # G2: 'pendiente' means payment created but not yet approved - never active
+    message = "Pago pendiente de aprobación" if sub["estado"] == "pendiente" else None
+
     return {
         "activo": sub["estado"] in ["activo", "prueba"],
         "estado": sub["estado"],
+        "message": message,
         "plan": sub["plan"],
         "fecha_expiracion": sub["fecha_expiracion"],
         "dias_restantes": (fecha_exp - ahora).days if fecha_exp > ahora else 0,
@@ -361,6 +377,33 @@ def validar_codigo_supabase(codigo: str, plan: Optional[str] = None):
     
     return codigo_info
 
+def consumir_codigo_descuento(codigo: str, plan: str, client_id: str):
+    """
+    Consume a discount code: re-validate, increment `usos_actuales` and insert
+    a row in `uso_codigos`. MUST only run after the MercadoPago POST succeeded
+    (or in the gratis path) so an MP failure never consumes the code (D4).
+    Raises 500 on failure - the orphaned preference is harmless.
+    """
+    codigo_info = validar_codigo_supabase(codigo, plan)
+    if not codigo_info:
+        raise HTTPException(status_code=500, detail="Error consumiendo codigo de descuento: codigo invalido")
+
+    supabase_url = get_supabase_url()
+    headers = get_supabase_headers()
+    try:
+        resp = requests.patch(
+            f"{supabase_url}/rest/v1/codigos_descuento?codigo=eq.{codigo}",
+            headers=headers, json={"usos_actuales": codigo_info["usos_actuales"] + 1}, timeout=10
+        )
+        resp.raise_for_status()
+        resp = requests.post(
+            f"{supabase_url}/rest/v1/uso_codigos",
+            headers=headers, json={"codigo": codigo, "client_id": client_id, "plan": plan}, timeout=10
+        )
+        resp.raise_for_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error consumiendo codigo de descuento: {str(e)}")
+
 # ==================== MOCK PAGO (SOLO PARA PRUEBAS) ====================
 
 @router.get("/mock-pago")
@@ -396,7 +439,7 @@ def mock_confirm(payment_id: str):
     sub = suscripciones[0]
     
     # Marcar como activo
-    update_url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{sub['client_id']}"
+    update_url = f"{supabase_url}/rest/v1/suscripciones?client_id=eq.{sub['client_id']}&app_id=eq.{sub.get('app_id', 'ordo')}"
     try:
         resp = requests.patch(update_url, headers=headers, json={"estado": "activo"}, timeout=10)
         resp.raise_for_status()
